@@ -1,8 +1,48 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
+[project]
+name = "wizedispatcher"
+version = "0.1.0"
+description = "Runtime dispatch with decorator-based overload registration."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE"}
+authors = [{name = "Joao Lopes", email = "joaoslopes@gmail.com"}]
+keywords = ["dispatch", "overload", "typing", "decorator"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/kairos-xx/wizedispatcher"
+Documentation = "https://github.com/kairos-xx/wizedispatcher/wiki"
+Repository = "https://github.com/kairos-xx/wizedispatcher"
+Issues = "https://github.com/kairos-xx/wizedispatcher/issues"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7",
+  "ruff>=0.5",
+  "mypy>=1.11",
+]
+
+
 [tool.poetry]
 name = "python-template"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Joao Lopes <joaoslopes@gmail.com>"]
 
 [tool.poetry.dependencies]
 # Note: poetry installs packages for python 3.11.3, but the python version
@@ -15,10 +55,11 @@ useLibraryCodeForTypes = true
 exclude = [".cache"]
 
 [tool.ruff]
-# https://beta.ruff.rs/docs/configuration/
+line-length = 79
+target-version = "py310"
+extend-exclude = ["docs", "demos"]
 select = ['E', 'W', 'F', 'I', 'B', 'C4', 'ARG', 'SIM']
 ignore = ['W291', 'W292', 'W293']
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.pytest.ini_options]
+testpaths = ["tests"]
