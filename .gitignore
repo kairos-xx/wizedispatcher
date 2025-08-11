@@ -9,3 +9,6 @@ venv/
 # Ignore Replit configuration files
 .replit
 replit.nix
+
+# Ignore working files
+.working/

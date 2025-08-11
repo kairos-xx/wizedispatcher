@@ -6,7 +6,7 @@ from wizedispatcher import TypeMatch
 
 def test_resolve_hint_string_and_forwardref() -> None:
     assert TypeMatch._resolve_hint("int") is int
-    fr = ForwardRef("int")
+    fr: ForwardRef = ForwardRef("int")
     assert TypeMatch._resolve_hint(fr) is int
 
 

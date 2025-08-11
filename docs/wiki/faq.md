@@ -75,3 +75,13 @@ The matching and scoring algorithm is encapsulated in the
 Then subclass `WizeDispatcher` and set its `_UNION_TYPE` and
 other class variables accordingly. Replace the global `dispatch`
 instance with your custom builder.
+
+### Can I omit parameters in overloads?
+
+Yes. Missing parameters inherit type hints and default values from the
+fallback function.
+
+### How are `*args` and `**kwargs` handled?
+
+If you use `*args` or `**kwargs` in an overload without full annotations,
+WizeDispatcherfills in missing type information from the fallback function.

@@ -1,103 +1,101 @@
-# DispatchBuilder
 
-[![PyPI version](https://badge.fury.io/py/dispatchbuilder.svg)](https://badge.fury.io/py/dispatchbuilder)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Build Status](https://github.com/kairos-xx/dispatchbuilder/actions/workflows/ci.yml/badge.svg)](https://github.com/kairos-xx/dispatchbuilder/actions)
+<div align="center">
+  <img src="https://github.com/kairos-xx/wizedispatcher/raw/main/resources/icon_raster.png" alt="Tree Interval Logo" width="150"/>
+    <h1>WizeDispatcher</h1>
+  <p><em>A lightweight, version-robust Python runtime dispatch library with powerful overload registration and type-based selection</em></p>
 
-DispatchBuilder is a lightweight runtime dispatch library for Python.
-It lets you register multiple implementations for a single function or
-method and automatically selects the best match at runtime based on
-the argument types. This simplifies code that would otherwise rely
-on long `if isinstance(...)` chains and makes your dispatch logic
-explicit and maintainable.
+  <a href="https://replit.com/@kairos/wizedispatcher">
+    <img src="https://github.com/kairos-xx/wizedispatcher/raw/main/resources/replit.png" alt="Try it on Replit" width="150"/>
+  </a>
 
-## Features
+</div>
 
-- Simple, declarative registration of overloads with decorators.
-- Dispatch on functions, instance methods, class methods, static
-  methods, and property setters.
-- Support for standard typing constructs: `Union`, `Optional`,
-  `Literal`, generic containers (list, tuple, dict, set), and
-  runtime‑checkable protocols.
-- Heuristic specificity scoring to choose the most appropriate
-  implementation.
-- Caching of dispatch results for fast repeated calls.
-- Zero external dependencies; works on Python 3.8 and newer.
-- Comprehensive test suite and examples.
+## ✨ Features
 
-## Installation
+- 🎯 **Overload Registration via Decorators**  
+  Register multiple implementations for the same function, method, or property setter, with **keyword** or **positional** type constraints.
 
-Install the latest release from PyPI:
+- 📝 **Type Hint Overrides**  
+  Overloads can specify types in the decorator to **override** or **partially use** type hints from the function signature.
 
-```bash
-pip install dispatchbuilder
-```
+- ⚙ **Partial Type Specification**  
+  Missing type constraints in an overload are automatically filled from the fallback/default implementation.
 
-To install from source:
+- 📊 **Weighted Specificity Scoring**  
+  Runtime match scoring system:  
+    - `3` → Exact type match  
+    - `2` → Instance match  
+    - `1` → `Any` annotation match  
+    - `0` → Wildcard match (unspecified param)  
+    - `-1` → No match
 
-```bash
-git clone https://github.com/kairos-xx/dispatchbuilder.git
-cd dispatchbuilder
-pip install -e .
-```
+- 🛠 **Full Typing Support**  
+  `Union`, `Optional`, `Literal`, generic containers (`list[int]`, `tuple[int, ...]`), and callable detection.
 
-## Quick Start
+- 📦 **Method & Property Support**  
+  Works with instance methods, `@classmethod`, `@staticmethod`, and property setters.
 
-Here’s a minimal example showing how to use DispatchBuilder to
-overload a function based on the type of its argument:
+- 🚀 **Fast Cached Dispatch**  
+  Caches previous matches to speed up repeated calls.
+
+- 🧩 **Varargs & Kwargs Handling**  
+  Fully supports `*args` and `**kwargs` in overloads, resolving them according to parameter order.
+
+- 🐍 **Version Robust**  
+  Works consistently across Python 3.8+ with no dependencies.
+
+## 🚀 Quick Start
 
 ```python
-from dispatchbuilder import dispatch
+from wizedispatcher import dispatch
 
-# Fallback implementation
+# Fallback
 def greet(name: object) -> str:
     return f"Hello, {name}!"
 
-# Overload for strings
+# Keyword constraint
 @dispatch.greet(name=str)
 def _(name: str) -> str:
     return f"Hello, {name}, nice to meet you."
 
-# Overload for integers
-@dispatch.greet(name=int)
-def _(name: int) -> str:
-    return f"Hello, person #{name}."
+# Positional constraint
+@dispatch.greet(str, int)
+def _(name, age) -> str:
+    return f"{name} is {age} years old"
 
-print(greet("Alice"))  # Hello, Alice, nice to meet you.
-print(greet(7))        # Hello, person #7.
-print(greet(3.14))     # Hello, 3.14!
+print(greet("Alice"))   # Hello, Alice, nice to meet you.
+print(greet("Bob", 30)) # Bob is 30 years old
 ```
 
-For more examples, including dispatching on multiple arguments,
-methods, and property setters, see the [examples section](#usage-examples).
+## 📊 Weight-Based Evaluation
 
-## Usage Examples
+WizeDispatcherevaluates overloads with a **specificity weight system**:
 
-### Dispatch on Multiple Parameters
+| Weight | Meaning                      |
+|--------|------------------------------|
+| 3      | Exact type match              |
+| 2      | Instance match                |
+| 1      | Any annotation match          |
+| 0      | Wildcard (unspecified param)  |
+| -1     | No match (discarded)          |
 
-You can constrain more than one argument by specifying types via
-keyword or positional arguments in the decorator:
+Example:  
+If two overloads match, the one with the **higher total weight** is chosen.
+
+## 🧩 Partial Type Specification
 
 ```python
-# Constrain both a and b
-@dispatch.combine(a=int, b=str)
-def _(a: int, b: str) -> str:
-    return f"Int={a}, Str={b}"
+# Default function defines all parameters
+def process(a: int, b: str, c: float) -> str:
+    return "default"
 
-# Constrain both with positional arguments
-@dispatch.combine(int, int)
-def _(a: int, b: int, c: object) -> str:
-    return f"Two ints: {a}, {b} (c is unconstrained)"
-
-# Base implementation (fallback)
-def combine(a: object, b: object, c: object) -> str:
-    return f"Generic {a}, {b}, {c}"
+# Overload defines only 'a', inherits 'b' and 'c' types from default
+@dispatch.process(a=str)
+def _(a: str, b, c) -> str:
+    return f"a is str, b is {type(b)}, c is {type(c)}"
 ```
 
-### Dispatch on Methods and Properties
-
-Dispatch works seamlessly with instance methods, class methods,
-static methods, and property setters:
+## 🛠 Methods & Properties
 
 ```python
 class Converter:
@@ -119,81 +117,22 @@ class Converter:
 
 c = Converter()
 c.value = 3
-assert c.value == 30
+print(c.value)  # 30
 c.value = "7"
-assert c.value == 7
+print(c.value)  # 7
 ```
 
-### Union, Literal, and Optional Types
+## 📦 Installation
 
-DispatchBuilder supports standard typing constructs:
-
-```python
-from typing import Union, Optional, Literal
-
-@dispatch.process(value=Union[int, float])
-def _(value: Union[int, float]) -> str:
-    return f"Number: {value}"
-
-@dispatch.process(value=Literal[1, 2, 3])
-def _(value: int) -> str:
-    return f"Small number: {value}"
-
-@dispatch.process(value=Optional[str])
-def _(value: Optional[str]) -> str:
-    return "No text" if value is None else f"Text: {value}"
+```bash
+pip install wizedispatcher
 ```
 
-## Documentation
+## 📚 Documentation
 
-Full documentation is included in this repository under the
-`dispatchbuilder_wiki` directory. You can browse it locally or view
-it online if hosted. The wiki covers:
+- **Wiki**: Complete documentation in `/wizedispatcher_wiki`
+- **Examples**: Ready-to-run demos in `/demo`
 
-- Installation instructions
-- Quickstart guide
-- Advanced usage and internals
-- API reference
-- Demos and how to run them
-- Troubleshooting and FAQ
+## 📝 License
 
-## Demos
-
-A collection of demo scripts lives in the `demo` directory. To run
-all demos sequentially, save the following script as `run_demos.py`
-in the project root and execute it:
-
-```python
-#!/usr/bin/env python3
-from pathlib import Path
-from subprocess import run
-from sys import executable
-
-
-def run_all_demos() -> None:
-    demo_dir:Path = Path(__file__).parent / "demo"
-    for file in sorted(demo_dir.glob("*.py")):
-        print(f"== Running {file.name} ==")
-        run([executable, str(file)], check=True)
-
-
-if __name__ == "__main__":
-    run_all_demos()
-```
-
-## Contributing
-
-Contributions are welcome! To report bugs or propose features,
-open an issue on GitHub. If you'd like to contribute code:
-
-1. Fork the repository and create a new branch for your feature or fix.
-2. Write tests to cover your change.
-3. Ensure all tests pass (`pytest`) and code is formatted with
-   `black`.
-4. Update documentation if necessary.
-5. Submit a pull request with a clear description of your changes.
-
-## License
-
-DispatchBuilder is released under the MIT License. See the
-`LICENSE` file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file.

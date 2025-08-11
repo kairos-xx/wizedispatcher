@@ -1,5 +1,3 @@
-LICENSE
-README.md
 setup.py
 src/wizedispatcher/__init__.py
 src/wizedispatcher/core.py
@@ -9,9 +7,9 @@ src/wizedispatcher.egg-info/dependency_links.txt
 src/wizedispatcher.egg-info/requires.txt
 src/wizedispatcher.egg-info/top_level.txt
 tests/test_abc_and_edge_cases.py
-tests/test_basic copy.py
 tests/test_basic.py
 tests/test_collections_and_sets.py
+tests/test_concat_dispatch.py
 tests/test_container_edge_paths.py
 tests/test_dispatch_free_and_cached.py
 tests/test_function_registry_reset_branch.py

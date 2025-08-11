@@ -23,3 +23,15 @@ understand, use, and extend WizeDispatcher:
 - **FAQ** – frequently asked questions and answers.
 - **Development** – guidelines for contributing to
   WizeDispatcher and how the library works internally.
+
+## New in This Version
+
+- **Partial Type Hints**: Overload functions can specify only some parameter
+  type hints; missing types are taken from the fallback function.
+- **Missing Arguments Filled**: If an overload omits parameters entirely,
+  their types and default values are completed from the fallback.
+- **`*args` / `**kwargs` Handling**: When overloads use var-positional or
+  var-keyword parameters without explicit annotations, these are matched
+  using the fallback’s annotations.
+- **Mixed Overload Strategies**: You can combine positional, keyword, and
+  fallback-derived type hints within a single overload registration.

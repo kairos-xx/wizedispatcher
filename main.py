@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DispatchBuilder showcase (entry-level, v4: version-robust).
+"""WizeDispatchershowcase (entry-level, v4: version-robust).
 
 Highlights (robust across versions):
 - Free functions (keyword/positional decorator types)
@@ -7,13 +7,15 @@ Highlights (robust across versions):
 - Property setter dispatch (with a safe base setter)
 - Containers, Optional, Callable
 - Container-kind dispatch (list[int] vs tuple[int, ...])
+- Omitted-param overloads with injected defaults
+  (fallback defaults + overload-provided defaults + gated params)
 
 Requires: `pip install wizedispatcher`
 """
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from wizedispatcher import dispatch
 
@@ -169,8 +171,35 @@ def times_two(n: int) -> int:
     return 2 * n
 
 
+# ---------- 5) NEW FEATURES: omitted params + default injection ---------- #
+def concat_adv(a: Any, b: Any, c: Any = "default") -> str:
+    """Fallback that carries a default for `c` used by overloads."""
+    return f"default - {a}{b}{c}"
+
+
+# Uses fallback default for `c` (overload omits `c`)
+@dispatch.concat_adv
+def _adv_a(a: int, b: int) -> str:
+    """Overload: treat as (a: int, b: int, c: str='default')."""
+    return f"_a - {a + b}{c}"  # type: ignore[name-defined]
+
+
+# Overload provides its own default for `c`; `b` must be float
+@dispatch.concat_adv(b=float)
+def _adv_b(c: int = 3) -> str:
+    """Overload: treat as (a: object, b: float, c: int=3)."""
+    return f"_b - {a}{b + c}"  # type: ignore[name-defined]
+
+
+# Requires `a: str` and `c: bool` explicitly; no default for `c`
+@dispatch.concat_adv(str, c=bool)
+def _adv_c(b: bool) -> str:
+    """Overload: (a: str, b: bool, c: bool) — only if `c` is bool."""
+    return f"_c - {a}{b and c}"  # type: ignore[name-defined]
+
+
 def main() -> None:
-    title("DispatchBuilder — Entry-Level Showcase")
+    title("WizeDispatcher— Entry-Level Showcase")
 
     title("1) Free Functions")
     show("concat(2, 3) → int+int", concat(2, 3), 5)
@@ -203,6 +232,18 @@ def main() -> None:
     show("t.v = 7 → doubled", t.v, 14)
     t.v = "hey"
     show("t.v = 'hey' → wrapped", t.v, "(hey)")
+
+    title("5) Omitted Params + Default Injection")
+    show("concat_adv(1, 2) → _a + fallback c",
+         concat_adv(1, 2), "_a - 3default")
+    show("concat_adv(1, 2, 's') → _a with c='s'",
+         concat_adv(1, 2, "s"), "_a - 3s")
+    show("concat_adv(1, 2.2, 3) → _b (b=float, c=3)",
+         concat_adv(1, 2.2, 3), "_b - 15.2")
+    show("concat_adv('1', True, False) → _c (a=str, c=bool)",
+         concat_adv("1", True, False), "_c - 1False")
+    show("concat_adv('1', True) → fallback (no c:bool)",
+         concat_adv("1", True), "default - 1Truedefault")
 
     print(f"\n{C.DIM}Done. All green checks mean the overload matched as "
           f"intended.{C.RESET}\n")

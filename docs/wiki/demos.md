@@ -42,3 +42,27 @@ The typical contents of the `demo` directory include:
 Refer to the source of each demo for details; the docstrings at
 the top of each script describe what it tests and what output you
 should expect.
+
+## Partial Hints and Missing Params Demo
+
+```python
+def concat(a: Any, b: Any, c: Any = "default") -> str:
+    return f"default - {a}{b}{c}"
+
+@dispatch.concat
+def _a(a: int, b: int) -> str:
+    return f"_a - {a + b}{c}"
+
+@dispatch.concat(b=float)
+def _b(c: int = 3) -> str:
+    return f"_b - {a}{b + c}"
+
+@dispatch.concat(str, c=bool)
+def _c(b: bool) -> str:
+    return f"_c - {a}{b and c}"
+
+print(concat(1, 2))            # _a - 3default
+print(concat(1, 2, "s"))       # _a - 3s
+print(concat(1, 2.2, 3))       # _b - 12.23
+print(concat("1", True, False))# _c - 1False
+```

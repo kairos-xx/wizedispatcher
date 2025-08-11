@@ -147,3 +147,36 @@ protocol. The dispatcher only treats protocols with
 supported with constraints and bounds. If a `TypeVar` has
 constraints, any matching constraint passes; if it has a bound, the
 bound is checked. Otherwise, it is treated as unconstrained.
+
+## Partial Type Hints and Missing Parameters
+
+WizeDispatchernow supports defining overloads with only partial type hints.
+If an overload omits a parameter entirely (including `*args` or `**kwargs`),
+its expected type and default value are inherited from the fallback function.
+
+### Example
+
+```python
+def concat(a: Any, b: Any, c: str = "default") -> str:
+    return f"default - {a}{b}{c}"
+
+@dispatch.concat
+def _a(a: int, b: int) -> str:
+    return f"_a - {a + b}{c}"  # c from fallback
+
+@dispatch.concat(b=float)
+def _b(c: int = 3) -> str:
+    return f"_b - {a}{b + c}"  # a from fallback
+
+@dispatch.concat(str, c=bool)
+def _c(b: bool) -> str:
+    return f"_c - {a}{b and c}"  # a from fallback
+```
+
+Here:
+- `_a` receives `c` from fallback default `"default"`.
+- `_b` receives `a` from fallback (type `Any`).
+- `_c` matches only when `c` is `bool`, no default.
+
+This makes it easier to register concise overloads without repeating all
+parameters from the fallback function.

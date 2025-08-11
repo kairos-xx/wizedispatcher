@@ -69,3 +69,17 @@ print(combine(3, 4))     # Generic 3, 4
 WizeDispatcher also supports instance methods, class methods,
 static methods, and property setters. See the
 [Advanced Usage](advanced.md) section for examples.
+
+### Quickstart with Partial Hints
+
+You can define overloads that omit some parameters; WizeDispatcherfills
+missing ones from the fallback.
+
+```python
+def concat(a: Any, b: Any, c: str = "default") -> str:
+    return f"default - {a}{b}{c}"
+
+@dispatch.concat
+def _a(a: int, b: int) -> str:
+    return f"_a - {a + b}{c}"  # c provided by fallback
+```

@@ -1,3 +1,4 @@
+from inspect import BoundArguments
 from typing import Any, Dict, Mapping
 
 from wizedispatcher import TypeMatch, WizeDispatcher, dispatch
@@ -27,7 +28,8 @@ def test_method_registry_helpers_accessible() -> None:
     # Introspect the method registry to exercise _bind/_provided_keys/_arg_types
     attr_name: str = "__dispatch_registry__"
     reg: Any = getattr(Z, attr_name)["m"]
-    bound: Any = reg._bind(z, args=(2, "y"), kwargs={})
+    bound: BoundArguments
+    bound, _ = reg._bind(z, args=(2, "y"), kwargs={})
     # _provided_keys may not be present in packaged build; rely on bound arguments
     assert tuple(bound.arguments.keys())[:2] == ("self", "a") or tuple(
         bound.arguments.keys()

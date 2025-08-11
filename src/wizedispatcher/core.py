@@ -6,7 +6,7 @@ This module provides:
 - `TypeMatch`: helpers to check values against type hints and to compute
   a specificity score used to rank overload candidates.
 - `WizeDispatcher`: a builder that creates namespaced decorators (e.g.,
-  `@dispatch.fn`) for registering overloads on free functions and on
+  `@dispatch.func`) for registering overloads on free functions and on
   methods, including instance/class/static methods and property setters.
 
 It keeps the original callable as a fallback, binds calls according to
@@ -64,51 +64,89 @@ WILDCARD: Final[object] = object()
 class TypeMatch:
     """Type-hint matching, scoring, and function selection helpers.
 
-    (Docstring shortened in package version for brevity.)
+    This utility centralizes all logic used to interpret typing hints,
+    check whether a runtime value conforms to a hint, and compute a
+    numeric specificity score. The score is used to rank overload
+    candidates. All methods are pure helpers and side-effect free.
     """
 
     @staticmethod
-    def _resolve_hints(
-        *,
-        func: Callable[..., Any],
-        g: Optional[Mapping[str, Any]] = None,
-        localns: Optional[Mapping[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        return get_type_hints(
-            obj=func,
-            globalns=(func.__globals__ if g is None else
-                      (g if isinstance(g, dict) else dict(g))),
-            localns=(None if localns is None else (
-                localns if isinstance(localns, dict) else dict(localns))),
-        )
-
-    @staticmethod
     def _resolve_hint(hint: object) -> object:
+        """Resolve string and ForwardRef hints into concrete types.
+
+        The resolution is performed against this module's global
+        namespace to support self-referential and deferred annotations.
+
+        Args:
+            hint: The raw hint object (may be str or ForwardRef).
+
+        Returns:
+            The resolved hint if evaluation succeeds; otherwise the
+            original `hint` is returned unchanged.
+        """
         with suppress(Exception):
-            g: Dict[str, Any] = vars(modules[__name__])
+            module_dict: Dict[str, Any] = vars(modules[__name__])
             if isinstance(hint, str):
-                return eval(hint, g, g)
+                return eval(hint, module_dict, module_dict)
             if isinstance(hint, ForwardRef):
-                return eval(hint.__forward_arg__, g, g)
+                return eval(hint.__forward_arg__, module_dict, module_dict)
         return hint
 
     @staticmethod
     def _is_typevar_like(hint: object) -> bool:
+        """Return True if the hint behaves like a TypeVar/ParamSpec.
+
+        Args:
+            hint: A typing hint to inspect.
+
+        Returns:
+            True when `hint` is a `TypeVar` or `ParamSpec`, else False.
+        """
         return isinstance(hint, (TypeVar, ParamSpec))
 
     @staticmethod
     def _class_distance(a: type, b: type) -> int:
+        """Compute distance of type `b` within `a.__mro__`.
+
+        This is used to score class hierarchy proximity. A smaller
+        value means `b` is closer to `a` in the MRO.
+
+        Args:
+            a: The concrete class used as the reference.
+            b: The class to look up within `a.__mro__`.
+
+        Returns:
+            Index of `b` within `a.__mro__` if present; a large number
+            when `b` is not in the MRO.
+        """
         with suppress(Exception):
             return a.__mro__.index(b)
         return 10_000
 
     @classmethod
     def _is_union_origin(cls, origin: object) -> bool:
+        """Return True if `origin` denotes a Union/PEP 604 union.
+
+        Args:
+            origin: The origin object from `typing.get_origin`.
+
+        Returns:
+            True when the origin represents a Union type.
+        """
         return origin is Union or (UnionType is not None
                                    and origin is UnionType)
 
     @classmethod
     def _kwargs_value_type_from_varkw(cls, annotation: object) -> object:
+        """Extract value type from a **kwargs mapping annotation.
+
+        Args:
+            annotation: The annotation of a VAR_KEYWORD parameter.
+
+        Returns:
+            The value type if the annotation is a mapping with two type
+            arguments; otherwise `Any`.
+        """
         ann: object = cls._resolve_hint(annotation)
         if get_origin(ann) in (dict, Mapping, ABCMapping, MutableMapping):
             args: Tuple[Any, ...] = get_args(ann)
@@ -118,6 +156,20 @@ class TypeMatch:
 
     @classmethod
     def _is_match(cls, value: object, hint: object) -> bool:
+        """Return True if `value` conforms to `hint`.
+
+        This function supports a broad subset of typing, including
+        `Annotated`, `Literal`, `ClassVar`, `Union` (and PEP 604),
+        `Callable` parameter shapes, container origins, protocols, and
+        TypedDict-like classes.
+
+        Args:
+            value: The runtime value to test.
+            hint: The typing hint to validate against.
+
+        Returns:
+            True if `value` matches `hint`; otherwise False.
+        """
         hint = cls._resolve_hint(hint)
         if hint in (Any, object) or hint is WILDCARD:
             return True
@@ -267,6 +319,20 @@ class TypeMatch:
 
     @classmethod
     def _type_specificity_score(cls, value: object, hint: object) -> int:
+        """Compute a numeric score that reflects match specificity.
+
+        Larger scores indicate a more specific and therefore preferred
+        match. The scoring is heuristic and considers constructs such as
+        `Literal`, `Annotated`, unions, callables, containers, and class
+        hierarchy distance.
+
+        Args:
+            value: The runtime value under evaluation.
+            hint: The typing hint used for scoring.
+
+        Returns:
+            An integer score. Higher is better.
+        """
         hint = cls._resolve_hint(hint)
         if hint in (Any, object) or hint is WILDCARD:
             return 0
@@ -340,6 +406,21 @@ class TypeMatch:
         match: Dict[str, object],
         options: list[Callable[..., Any]],
     ) -> list[Callable[..., Any]]:
+        """Return overloads that best match the provided argument mapping.
+
+        The function filters `options` by compatibility with `match` and
+        then computes a score for each candidate using
+        `_type_specificity_score`. All candidates tied for the highest
+        score are returned.
+
+        Args:
+            match: Mapping from parameter name to runtime value.
+            options: List of candidate callables to evaluate.
+
+        Returns:
+            A list of callable overloads with the highest score that
+            still satisfy type compatibility for all keys in `match`.
+        """
         if not match or not options:
             return []
         keys: Tuple[str, ...] = tuple(match.keys())
@@ -351,24 +432,41 @@ class TypeMatch:
             kw_param: Optional[Parameter],
             tmap_local: Optional[Mapping[str, Any]],
         ) -> object:
+            """Resolve the effective hint for parameter `k`.
+
+            The resolution prefers decorator-provided type maps over the
+            function signature, and supports **kwargs value types.
+
+            Args:
+                k: Parameter name.
+                params_map: Map of parameter names to `Parameter`.
+                kw_param: The VAR_KEYWORD parameter if present.
+                tmap_local: Optional decorator type map for the function.
+
+            Returns:
+                The effective typing hint for `k`.
+            """
             if tmap_local and k in tmap_local:
                 return cls._resolve_hint(tmap_local[k])
-            p: Optional[Parameter] = params_map.get(k)
-            if p is None:
+            param: Optional[Parameter] = params_map.get(k)
+            if param is None:
                 return (cls._kwargs_value_type_from_varkw(kw_param.annotation)
                         if kw_param and kw_param is not Parameter.empty else
                         Any)
-            return p.annotation if p.annotation is not Parameter.empty else Any
+            return (param.annotation
+                    if param.annotation is not Parameter.empty else Any)
 
-        for fn in options:
-            params: MappingProxyType[str, Parameter] = signature(fn).parameters
+        for func in options:
+            params: MappingProxyType[str,
+                                     Parameter] = signature(func).parameters
             varkw: Optional[Parameter] = next(
                 (p
                  for p in params.values() if p.kind == Parameter.VAR_KEYWORD),
                 None,
             )
             tmap: Optional[Mapping[str,
-                                   Any]] = getattr(fn, "__dispatch_type_map__",
+                                   Any]] = getattr(func,
+                                                   "__dispatch_type_map__",
                                                    None)
             if not all(
                     cls._is_match(match[k], _key_hint(k, params, varkw, tmap))
@@ -391,26 +489,51 @@ class TypeMatch:
             if any(p.kind == Parameter.VAR_POSITIONAL
                    for p in params.values()):
                 score -= 2
-            ranked.append((fn, score))
-        return ([fn for fn, s in ranked
-                 if s == max(s for _, s in ranked)] if ranked else [])
+            ranked.append((func, score))
+        return [func for func, s in ranked
+                if s == max(s for _, s in ranked)] if ranked else []
 
 
 class WizeDispatcher:
-    """Create namespaced decorators to register method/function overloads."""
+    """Create namespaced decorators to register method/function overloads.
+
+    Instances expose attribute-based decorator factories (e.g.,
+    `dispatch.fn`). Each decorator registers a typed overload against an
+    existing function or method, keeping the original callable as the
+    fallback. Dispatch binds calls using the original signature, ranks
+    candidates with `TypeMatch`, and invokes the best match.
+    """
 
     _pending: ClassVar[Dict[str, "WizeDispatcher._OverloadDescriptor"]] = {}
 
     @dataclass(frozen=True)
     class _Overload:
+        """Container for a single overload and its metadata.
+
+        Attributes:
+            _func: Wrapped callable that implements the overload.
+            _type_map: Effective type map used for dispatch matching.
+            _param_order: Parameter order used by the dispatcher.
+            _dec_keys: Keys explicitly provided via decorator typing.
+            _is_original: True if this entry refers to the fallback.
+            _reg_index: Registration order index for tie-breaking.
+            _defaults: Overload-defined default values by parameter.
+        """
         _func: Callable[..., Any]
         _type_map: Mapping[str, Any]
         _param_order: Tuple[str, ...]
         _dec_keys: FrozenSet[str]
         _is_original: bool
         _reg_index: int
+        _defaults: Mapping[str, Any]  # overload-provided defaults per name
 
     class _BaseRegistry:
+        """Common registry logic for function and method targets.
+
+        This class holds the list of overloads, the original callable,
+        the bound signature, and a small cache keyed by runtime argument
+        types. Subclasses specialize receiver handling.
+        """
         _target_name: str
         _original: Callable[..., Any]
         _sig: Signature
@@ -427,6 +550,14 @@ class WizeDispatcher:
             original: Callable[..., Any],
             skip_first: bool,
         ) -> None:
+            """Initialize registry for a target function or method.
+
+            Args:
+                target_name: Name of the target attribute/function.
+                original: The original callable kept as fallback.
+                skip_first: Whether to skip the first param when binding
+                    (True for instance/class methods and setters).
+            """
             self._target_name = target_name
             self._original = original
             self._sig = signature(obj=original)
@@ -442,19 +573,126 @@ class WizeDispatcher:
             instance: Any | None,
             args: Tuple[Any, ...],
             kwargs: Dict[str, Any],
-        ) -> BoundArguments:
-            bound: BoundArguments = (self._sig.bind(instance, *args, **kwargs)
-                                     if self._skip_first else self._sig.bind(
-                                         *args, **kwargs))
-            bound.apply_defaults()
-            return bound
+        ) -> Tuple[BoundArguments, FrozenSet[str]]:
+            """Bind a call to the original signature and add defaults.
+
+            Args:
+                instance: Receiver for methods; None for free functions.
+                args: Positional arguments provided by the caller.
+                kwargs: Keyword arguments provided by the caller.
+
+            Returns:
+                A tuple of `(bound_args, provided_keys)` where
+                `bound_args` is a `BoundArguments` with defaults applied,
+                and `provided_keys` are the names present in the call.
+            """
+            raw: BoundArguments = (self._sig.bind(instance, *args, **kwargs)
+                                   if self._skip_first else self._sig.bind(
+                                       *args, **kwargs))
+            raw.apply_defaults()
+            return raw, frozenset(n for n in self._param_order
+                                  if n in raw.arguments)
 
         def _arg_types(self, bound: BoundArguments) -> Tuple[Type[Any], ...]:
+            """Return the runtime types for parameters in dispatch order.
+
+            Args:
+                bound: Bound arguments produced by `_bind`.
+
+            Returns:
+                A tuple of concrete runtime types per parameter.
+            """
             return tuple(
                 type(bound.arguments[name]) for name in self._param_order)
 
+        @staticmethod
+        def _make_adapter(
+            func: Callable[...,
+                           Any]) -> Tuple[Callable[..., Any], Dict[str, Any]]:
+            """Wrap `func` so it can be called with the full kwargs map.
+
+            The adapter allows bodies that omit parameters in their
+            signature to still reference those names. Missing names are
+            injected temporarily into the function's globals.
+
+            Args:
+                func: The overload function to adapt.
+
+            Returns:
+                A tuple `(adapter, defaults)` where `adapter` is a
+                callable with the same semantics as `func` but tolerant
+                to extra kwargs, and `defaults` maps each declared
+                parameter to its default value if present.
+            """
+            param: MappingProxyType[str,
+                                    Parameter] = signature(func).parameters
+
+            def adapter(*_a: Any, **all_named: Any) -> Any:
+                """Invoke `func`, injecting undeclared names as globals.
+
+                The adapter extracts arguments in the function's own
+                declared order, passes keyword-only arguments directly,
+                forwards unknown keywords if `**kwargs` is declared, and
+                temporarily adds extra names to `func.__globals__`.
+                """
+                # Build args/kwargs for declared params
+                kwargs_pass: Dict[str, Any] = {
+                    n: all_named[n]
+                    for n in [
+                        p.name for p in param.values()
+                        if p.kind == Parameter.KEYWORD_ONLY
+                    ] if n in all_named
+                }
+                if any(p.kind == Parameter.VAR_KEYWORD
+                       for p in param.values()):
+                    for k, v in all_named.items():
+                        if k not in param:
+                            kwargs_pass[k] = v
+
+                globalns: Dict[str, Any] = func.__globals__
+                injected: Dict[str, Tuple[bool, Any]] = {}
+                try:
+                    for k, v in all_named.items():
+                        if k not in param:
+                            injected[k] = (True,
+                                           globalns[k]) if k in globalns else (
+                                               False, None)
+                            globalns[k] = v
+                    return func(
+                        *[
+                            all_named[n] for n in [
+                                p.name for p in param.values()
+                                if p.kind in (Parameter.POSITIONAL_ONLY,
+                                              Parameter.POSITIONAL_OR_KEYWORD)
+                            ] if n in all_named
+                        ], **kwargs_pass)
+                finally:
+                    for k, (had, old) in injected.items():
+                        if had:
+                            globalns[k] = old
+                        else:
+                            del globalns[k]
+
+            return update_wrapper(adapter, func), {
+                p.name: p.default
+                for p in param.values() if p.default is not Parameter.empty
+            }
+
         def _invoke(self, func: Callable[..., Any],
                     bound: BoundArguments) -> Any:
+            """Invoke `func` using the full bound argument mapping.
+
+            The adapter produced by `_make_adapter` ignores extraneous
+            names, so we always pass the complete mapping.
+
+            Args:
+                func: The chosen callable to invoke.
+                bound: Bound arguments with defaults applied.
+
+            Returns:
+                The callable's return value.
+            """
+            # We always pass the full named argument map; adapters trim it.
             return func(**dict(bound.arguments))
 
         def _dispatch(
@@ -464,20 +702,103 @@ class WizeDispatcher:
             args: Tuple[Any, ...],
             kwargs: Dict[str, Any],
         ) -> Any:
-            bound: BoundArguments = self._bind(instance, args, kwargs)
+            """Select the best overload and invoke it.
+
+            The call is bound to the original signature, defaults are
+            applied, runtime values are scored against each overload's
+            effective hints, and the best-scoring compatible candidate
+            is executed.
+
+            Args:
+                instance: Receiver for methods or None for functions.
+                args: Positional arguments.
+                kwargs: Keyword arguments.
+
+            Returns:
+                The result of the selected callable.
+            """
+            bound, provided = self._bind(instance, args, kwargs)
             types_key: Tuple[Type[Any], ...] = self._arg_types(bound)
+            chosen: Optional[Callable[..., Any]]
             if (chosen := self._cache.get(types_key)) is not None:
                 return self._invoke(chosen, bound)
-            chosen: Any = next(
-                iter(
-                    TypeMatch(
-                        {n: bound.arguments[n]
-                         for n in self._param_order},
-                        [ov._func
-                         for ov in self._overloads] + [self._original],
-                    )),
-                self._original,
-            )
+            keys: Tuple[str, ...] = self._param_order
+            best_score: Optional[int] = None
+            best_func: Optional[Callable[..., Any]] = None
+
+            def key_hint(
+                param_name: str,
+                params_map: Mapping[str, Parameter],
+                kw_param: Optional[Parameter],
+                tmap_local: Optional[Mapping[str, Any]],
+            ) -> object:
+                """Resolve the effective hint for parameter `param_name`.
+
+                Prefers decorator-provided type map entries over the
+                function annotation. Falls back to **kwargs value types.
+
+                Args:
+                    param_name: Parameter name.
+                    params_map: Map of parameter names to `Parameter`.
+                    kw_param: The VAR_KEYWORD parameter if present.
+                    tmap_local: Optional decorator type map for `func`.
+
+                Returns:
+                    The effective typing hint for `param_name`.
+                """
+                if tmap_local and param_name in tmap_local:
+                    return TypeMatch._resolve_hint(tmap_local[param_name])
+                param: Optional[Parameter] = params_map.get(k)
+                if param is None:
+                    return (TypeMatch._kwargs_value_type_from_varkw(
+                        kw_param.annotation) if kw_param
+                            and kw_param is not Parameter.empty else Any)
+                return (param.annotation
+                        if param.annotation is not Parameter.empty else Any)
+
+            # Evaluate each overload with candidate-specific defaults
+            for ov in self._overloads:
+                # Per-candidate value selection: use overload default if
+                # the caller didn't provide this argument.
+                def val_for(k: str, ov: WizeDispatcher._Overload = ov) -> Any:
+                    """Return the matching-time value for parameter `k`.
+
+                    Values come from the bound call unless the overload
+                    defines a default for `k`, in which case the default
+                    is used for matching.
+                    """
+                    return ov._defaults[
+                        k] if k in ov._defaults else bound.arguments[k]
+
+                func: Callable[..., Any] = ov._func
+                params: MappingProxyType[str, Parameter] = signature(
+                    func).parameters
+                varkw: Optional[Parameter] = next(
+                    (p for p in params.values()
+                     if p.kind == Parameter.VAR_KEYWORD), None)
+                tmap: Optional[Mapping[str, Any]] = getattr(
+                    func, "__dispatch_type_map__", None)
+                # Eligibility check
+                if not all(
+                        TypeMatch._is_match(val_for(k),
+                                            key_hint(k, params, varkw, tmap))
+                        for k in keys):
+                    continue
+                # Scoring (mirrors TypeMatch.__new__ logic; no penalty for
+                # omitted params because adapters accept full kwargs)
+                score: int = 0
+                for k in keys:
+                    hint: object = key_hint(k, params, varkw, tmap)
+                    score += TypeMatch._type_specificity_score(
+                        val_for(k),
+                        hint) + (40 if TypeMatch._resolve_hint(hint)
+                                 not in (Any, object) else 20)
+                if any(p.kind == Parameter.VAR_POSITIONAL
+                       for p in params.values()):
+                    score -= 2
+                if best_score is None or score > best_score:
+                    best_score, best_func = score, func
+            chosen = best_func or self._original
             self._cache[types_key] = chosen
             return self._invoke(chosen, bound)
 
@@ -490,22 +811,40 @@ class WizeDispatcher:
             is_original: bool,
             reg_index_override: Optional[int] = None,
         ) -> None:
+            """Register an overload against this registry.
+
+            The function is wrapped by `_make_adapter` so it can accept
+            the full kwargs map. The resulting metadata is appended to
+            the overload list and the dispatch cache is cleared.
+
+            Args:
+                func: The overload function to register.
+                type_map: Effective type map for dispatch matching.
+                dec_keys: Keys explicitly provided by the decorator.
+                is_original: True when `func` is the fallback callable.
+                reg_index_override: Optional explicit registration index.
+            """
             attr_str: str = "__dispatch_type_map__"
-            setattr(func, attr_str, dict(type_map))
+            wrapped: Any
+            defaults: Dict[str, Any]
+            wrapped, defaults = self._make_adapter(func)
+            setattr(wrapped, attr_str, dict(type_map))
             self._overloads.append(
                 WizeDispatcher._Overload(
-                    _func=func,
+                    _func=wrapped,
                     _type_map=type_map,
                     _param_order=self._param_order,
                     _dec_keys=dec_keys,
                     _is_original=is_original,
                     _reg_index=(reg_index_override if reg_index_override
                                 is not None else self._reg_counter),
+                    _defaults=defaults,
                 ))
             self._reg_counter += 1
             self._cache.clear()
 
     class _MethodRegistry(_BaseRegistry):
+        """Registry specialization for methods and property setters."""
 
         def __init__(
             self,
@@ -514,6 +853,14 @@ class WizeDispatcher:
             original: Callable[..., Any],
             has_receiver: bool,
         ) -> None:
+            """Initialize a method registry.
+
+            Args:
+                target_name: Name of the target method/property.
+                original: The original method or accessor function.
+                has_receiver: True for instance/class methods and
+                    property setters; False for static methods.
+            """
             super().__init__(
                 target_name=target_name,
                 original=original,
@@ -521,60 +868,83 @@ class WizeDispatcher:
             )
 
     class _FunctionRegistry(_BaseRegistry):
+        """Registry specialization for top-level free functions."""
 
         def __init__(self, *, target_name: str,
                      original: Callable[..., Any]) -> None:
+            """Initialize a function registry.
+
+            Args:
+                target_name: Name of the target function.
+                original: The original function kept as fallback.
+            """
             super().__init__(target_name=target_name,
                              original=original,
                              skip_first=False)
 
     class _OverloadDescriptor:
+        """Descriptor that queues method overloads during class creation.
+
+        Overloads declared inside a class body are collected here and
+        materialized when the owner class is finalized (`__set_name__`).
+        """
         _queues: Dict[
             str,
             list[Tuple[Callable[..., Any], Dict[str, Any], Tuple[Any, ...]]],
         ]
 
         def __init__(self) -> None:
+            """Initialize an empty queue of pending overload entries."""
             self._queues = {}
 
         def __set_name__(self, owner: Type[Any], _own_name: str) -> None:
-            reg_attr: str = "__dispatch_registry__"
+            """Finalize queued registrations for the owning class.
+
+            This creates or reuses a `_MethodRegistry`, registers the
+            fallback signature, wraps the target attribute to dispatch,
+            and then registers all queued overloads.
+
+            Args:
+                owner: The class that now owns this descriptor.
+                _own_name: The attribute name used on the class.
+            """
+            attr_str: str = "__dispatch_registry__"
             reg_map: Dict[str, WizeDispatcher._MethodRegistry] = getattr(
-                owner, reg_attr, {})
-            if not hasattr(owner, reg_attr):
-                setattr(owner, reg_attr, reg_map)
+                owner, attr_str, {})
+            if not hasattr(owner, attr_str):
+                setattr(owner, attr_str, reg_map)
             reg: WizeDispatcher._MethodRegistry
             for target_name, items in self._queues.items():
                 if target_name not in reg_map:
                     original_attr: Any = owner.__dict__.get(target_name)
                     has_receiver: bool = True
+                    original_func: Callable[..., Any]
                     if (isinstance(original_attr, property)
                             and original_attr.fget):
-                        original_fn: Callable[...,
-                                              Any] = (original_attr.fset
-                                                      or original_attr.fget)
+                        original_func = (original_attr.fset
+                                         or original_attr.fget)
                     elif isinstance(original_attr,
                                     (classmethod, staticmethod)):
-                        original_fn = original_attr.__func__
+                        original_func = original_attr.__func__
                         has_receiver = isinstance(original_attr, classmethod)
                     elif callable(original_attr):
-                        original_fn = original_attr
+                        original_func = original_attr
                     else:
-                        original_fn = items[-1][0]
+                        original_func = items[-1][0]
                     reg = reg_map[target_name] = (
                         WizeDispatcher._MethodRegistry(
                             target_name=target_name,
-                            original=original_fn,
+                            original=original_func,
                             has_receiver=has_receiver,
                         ))
                     reg.register(
-                        func=original_fn,
+                        func=original_func,
                         type_map={
                             n:
                             WizeDispatcher._resolve_hints(
-                                func=original_fn,
-                                g=getattr(original_fn, "__wrapped__",
-                                          original_fn).__globals__,
+                                func=original_func,
+                                globalns=getattr(original_func, "__wrapped__",
+                                                 original_func).__globals__,
                                 localns=owner.__dict__,
                             ).get(n, WILDCARD)
                             for n in reg._param_order
@@ -584,13 +954,15 @@ class WizeDispatcher:
                         reg_index_override=-1,
                     )
 
-                    def _wrap_inst(self_: Any,
+                    def _wrap_inst(self: Any,
                                    *a: Any,
-                                   _reg=reg,
+                                   reg=reg,
                                    **k: Any) -> Any:
-                        return _reg._dispatch(instance=self_, args=a, kwargs=k)
+                        """Bound method wrapper that forwards to dispatch."""
+                        return reg._dispatch(instance=self, args=a, kwargs=k)
 
-                    selected_func: Any = _wrap_inst
+                    selected_func: Union[property, classmethod,
+                                         Callable[..., Any]] = _wrap_inst
                     if isinstance(original_attr, property):
                         selected_func = original_attr.setter(
                             lambda self_, value, _reg=reg: _reg._dispatch(
@@ -602,16 +974,22 @@ class WizeDispatcher:
                             lambda *a, _reg=reg, **k: _reg._dispatch(
                                 instance=None, args=a, kwargs=k))
                     setattr(owner, target_name, selected_func)
-                reg = getattr(owner, reg_attr)[target_name]
+                reg = getattr(owner, attr_str)[target_name]
+                # Fallback annotations from the original (for merging)
+                fb_ann: Dict[str, Any] = WizeDispatcher._resolve_hints(
+                    func=reg._original,
+                    globalns=reg._original.__globals__,
+                    localns=owner.__dict__,
+                )
                 for func, decorator_types, decorator_pos in items:
                     if not getattr(func, "__qualname__",
                                    "").startswith(owner.__qualname__ + "."):
                         continue
-                    ldec: int = len(decorator_pos)
                     dec_types: Dict[str, Any] = {
                         **{
                             v: decorator_pos[i]
-                            for i, v in enumerate(reg._param_order) if i < ldec
+                            for i, v in enumerate(reg._param_order) if \
+                            i < len(decorator_pos)
                         },
                         **decorator_types,
                     }
@@ -622,9 +1000,10 @@ class WizeDispatcher:
                             decorator_types=dec_types,
                             fn_ann=WizeDispatcher._resolve_hints(
                                 func=func,
-                                g=func.__globals__,
+                                globalns=func.__globals__,
                                 localns=owner.__dict__,
                             ),
+                            fallback_ann=fb_ann,
                         ),
                         dec_keys=frozenset(dec_types.keys()),
                         is_original=False,
@@ -632,6 +1011,7 @@ class WizeDispatcher:
             WizeDispatcher._pending.pop(owner.__qualname__, None)
 
         def __get__(self, instance: Any, owner: Optional[type] = None) -> Self:
+            """Return the descriptor itself (not a bound object)."""
             return self
 
         def _add(
@@ -642,11 +1022,28 @@ class WizeDispatcher:
             decorator_types: Dict[str, Any],
             decorator_pos: Tuple[Any, ...],
         ) -> None:
+            """Queue an overload declared within a class body.
+
+            Args:
+                target_name: Name of the target attribute.
+                func: The function object being decorated.
+                decorator_types: Mapping of explicit decorator types.
+                decorator_pos: Positional decorator types in order.
+            """
             self._queues.setdefault(target_name, []).append(
                 (func, dict(decorator_types), tuple(decorator_pos)))
 
     @staticmethod
     def _param_order(*, sig: Signature, skip_first: bool) -> Tuple[str, ...]:
+        """Compute parameter order used during dispatch.
+
+        Args:
+            sig: Signature of the original callable.
+            skip_first: Whether to drop the first parameter (e.g., `self`).
+
+        Returns:
+            A tuple of parameter names in evaluation order.
+        """
         params: list[Parameter] = list(sig.parameters.values())
         if skip_first and params:
             params = params[1:]
@@ -660,15 +1057,30 @@ class WizeDispatcher:
             decorator_types: Mapping[str, Any],
             decorator_pos: Tuple[Any, ...] = (),
     ) -> Callable[..., Any]:
+        """Register an overload for a top-level function target.
+
+        This ensures the target function is wrapped with a dispatcher
+        and adds the provided overload with merged type information.
+
+        Args:
+            target_name: Name of the existing function to overload.
+            func: Overload function object to register.
+            decorator_types: Mapping of explicit decorator types.
+            decorator_pos: Positional decorator types by parameter order.
+
+        Returns:
+            Either the wrapped target function (when replacing the
+            original symbol) or the original `func`.
+        """
         mod: ModuleType = modules[func.__module__]
-        g: Dict[str, Any] = mod.__dict__
-        reg_attr: str = "__fdispatch_registry__"
+        mod_dict: Dict[str, Any] = mod.__dict__
+        attr_str: str = "__fdispatch_registry__"
         wrap_attr: str = "__fdispatch_wrapper__"
-        if not hasattr(mod, reg_attr):
-            setattr(mod, reg_attr, {})
+        if not hasattr(mod, attr_str):
+            setattr(mod, attr_str, {})
         regmap: Dict[str, WizeDispatcher._FunctionRegistry] = getattr(
-            mod, reg_attr)
-        target: Optional[Callable[..., Any]] = g.get(target_name)
+            mod, attr_str)
+        target: Optional[Callable[..., Any]] = mod_dict.get(target_name)
         if target is None or not callable(target):
             raise AttributeError(f"Function '{target_name}' "
                                  "must exist before registering overloads")
@@ -682,9 +1094,9 @@ class WizeDispatcher:
                 target,
             )
             setattr(wrapped, wrap_attr, True)
-            g[target_name] = wrapped
+            mod_dict[target_name] = wrapped
         else:
-            current: Callable[..., Any] = g[target_name]
+            current: Callable[..., Any] = mod_dict[target_name]
             if not getattr(current, wrap_attr, False):
                 reg = regmap[target_name]
                 reg._original = current
@@ -700,26 +1112,27 @@ class WizeDispatcher:
                     type_map={
                         n:
                         WizeDispatcher._resolve_hints(func=current,
-                                                      g=g).get(n, WILDCARD)
+                                                      globalns=mod_dict).get(
+                                                          n, WILDCARD)
                         for n in reg._param_order
                     },
                     dec_keys=frozenset(),
                     is_original=True,
                     reg_index_override=-1,
                 )
-                wrapped: Callable[..., Any] = update_wrapper(
+                wrapped = update_wrapper(
                     lambda *a, **k: reg._dispatch(
                         instance=None, args=a, kwargs=k),
                     current,
                 )
                 setattr(wrapped, wrap_attr, True)
-                g[target_name] = wrapped
+                mod_dict[target_name] = wrapped
         reg = regmap[target_name]
-        ldec: int = len(decorator_pos)
         dec_types: Dict[str, Any] = {
             **{
                 name: decorator_pos[i]
-                for i, name in enumerate(reg._param_order) if i < ldec
+                for i, name in enumerate(reg._param_order) if \
+                i < len(decorator_pos)
             },
             **decorator_types,
         }
@@ -728,24 +1141,38 @@ class WizeDispatcher:
             type_map=WizeDispatcher._merge_types(
                 order=reg._param_order,
                 decorator_types=dec_types,
-                fn_ann=WizeDispatcher._resolve_hints(func=func, g=g),
+                fn_ann=WizeDispatcher._resolve_hints(func=func,
+                                                     globalns=mod_dict),
+                fallback_ann=WizeDispatcher._resolve_hints(func=reg._original,
+                                                           globalns=mod_dict),
             ),
             dec_keys=frozenset(dec_types.keys()),
             is_original=False,
         )
-        return g[target_name] if func.__name__ == target_name else func
+        return mod_dict[target_name] if func.__name__ == target_name else func
 
     @staticmethod
     def _resolve_hints(
         *,
         func: Callable[..., Any],
-        g: Optional[Mapping[str, Any]] = None,
+        globalns: Optional[Mapping[str, Any]] = None,
         localns: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
+        """Resolve annotations for `func` using provided namespaces.
+
+        Args:
+            func: The function whose annotations will be resolved.
+            globalns: Optional globals mapping to use for evaluation.
+            localns: Optional locals mapping to use for evaluation.
+
+        Returns:
+            A name-to-annotation mapping with all forward references
+            evaluated to concrete objects where possible.
+        """
         return get_type_hints(
             obj=func,
-            globalns=(func.__globals__ if g is None else
-                      (g if isinstance(g, dict) else dict(g))),
+            globalns=(func.__globals__ if globalns is None else (
+                globalns if isinstance(globalns, dict) else dict(globalns))),
             localns=(None if localns is None else (
                 localns if isinstance(localns, dict) else dict(localns))),
         )
@@ -756,33 +1183,75 @@ class WizeDispatcher:
         order: Tuple[str, ...],
         decorator_types: Mapping[str, Any],
         fn_ann: Mapping[str, Any],
+        fallback_ann: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
+        """Merge decorator, function, and fallback annotations.
+
+        The precedence is: decorator types > function annotations >
+        fallback annotations > wildcard.
+
+        Args:
+            order: Parameter names in dispatch order.
+            decorator_types: Types explicitly provided by decorator.
+            fn_ann: Resolved annotations from the overload function.
+            fallback_ann: Resolved annotations from the fallback.
+
+        Returns:
+            A dict mapping parameter names to the effective types.
+        """
         return {
-            name: (decorator_types[name]
-                   if name in decorator_types else fn_ann.get(name, WILDCARD))
+            name: (decorator_types[name] if name in decorator_types else
+                   (fn_ann[name] if name in fn_ann else
+                    (fallback_ann or {}).get(name, WILDCARD)))
             for name in order
         }
 
     def __getattr__(self, target_name: str):
-        """Decorator factory for registering overloads under a given name.
+        """Create a decorator factory bound to `target_name`.
 
-        Allows usage like:
-          @dispatch.fn            # use function annotations
-          @dispatch.fn(int, str)  # positional types in parameter order
-          @dispatch.fn(a=int)     # keyword types by parameter name
+        The returned callable supports three forms:
+        - `@dispatch.name` (use function annotations)
+        - `@dispatch.name(int, str)` (positional types)
+        - `@dispatch.name(a=int)` (keyword types)
         """
 
         def _extract_func(obj):
-            # unwrap classmethod/staticmethod to the underlying function
-            return (obj.__func__ if isinstance(obj, (classmethod,
-                                                     staticmethod)) else obj)
+            """Return the underlying function for class/static methods.
+
+            Args:
+                obj: A function, `classmethod`, or `staticmethod`.
+
+            Returns:
+                The raw function object.
+            """
+            return obj.__func__ if isinstance(obj, (classmethod,
+                                                    staticmethod)) else obj
 
         def _decorator_factory(*decorator_args, **decorator_kwargs):
+            """Return a decorator that registers an overload.
+
+            Positional arguments map to parameters by position, and
+            keyword arguments map by name. When used as a bare decorator,
+            the function's own annotations are used.
+            """
 
             def _queue_or_register(*, func, decorator_types, decorator_pos):
+                """Queue or immediately register an overload.
+
+                Overloads defined inside a class body are queued and
+                materialized by `_OverloadDescriptor.__set_name__`. Free
+                functions are registered immediately.
+
+                Args:
+                    func: The function being decorated.
+                    decorator_types: Mapping of types by parameter name.
+                    decorator_pos: Positional types by parameter order.
+
+                Returns:
+                    A descriptor (for class scope) or the possibly
+                    replaced function (for free functions).
+                """
                 qual: str = getattr(func, "__qualname__", "")
-                # If we're inside a class body, queue for registration at
-                # class creation
                 if "." in qual:
                     owner_qual: str = qual.split(".", 1)[0]
                     desc: Any = WizeDispatcher._pending.get(owner_qual)
@@ -796,8 +1265,6 @@ class WizeDispatcher:
                         decorator_pos=tuple(decorator_pos),
                     )
                     return desc
-                # Free function: register immediately (requires base function
-                # to exist)
                 return self._register_function_overload(
                     target_name=target_name,
                     func=func,
@@ -805,24 +1272,19 @@ class WizeDispatcher:
                     decorator_pos=tuple(decorator_pos),
                 )
 
-            # Bare decorator form: @dispatch.name applied directly to
-            # a function
-            if (len(decorator_args) == 1 and not decorator_kwargs
-                    and (hasattr(decorator_args[0], "__code__")
-                         or isinstance(decorator_args[0],
-                                       (classmethod, staticmethod)))):
-                return _queue_or_register(
-                    func=_extract_func(decorator_args[0]),
-                    decorator_types={},
-                    decorator_pos=(),
-                )
-
-            # Otherwise, return a decorator that will receive the function
-            return lambda func: _queue_or_register(
-                func=_extract_func(func),
-                decorator_types=decorator_kwargs,
-                decorator_pos=tuple(decorator_args),
-            )
+            return _queue_or_register(
+                func=_extract_func(decorator_args[0]),
+                decorator_types={},
+                decorator_pos=(),
+            ) if (len(decorator_args) == 1 and not decorator_kwargs and
+                  (hasattr(decorator_args[0], "__code__")
+                   or isinstance(decorator_args[0],
+                                 (classmethod, staticmethod)))
+                  ) else lambda func: _queue_or_register(
+                      func=_extract_func(func),
+                      decorator_types=decorator_kwargs,
+                      decorator_pos=tuple(decorator_args),
+                  )
 
         return _decorator_factory
 
