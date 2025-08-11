@@ -2,7 +2,7 @@
 
 [![PyPI version](https://badge.fury.io/py/dispatchbuilder.svg)](https://badge.fury.io/py/dispatchbuilder)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Build Status](https://github.com/your-username/dispatchbuilder/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/dispatchbuilder/actions)
+[![Build Status](https://github.com/kairos-xx/dispatchbuilder/actions/workflows/ci.yml/badge.svg)](https://github.com/kairos-xx/dispatchbuilder/actions)
 
 DispatchBuilder is a lightweight runtime dispatch library for Python.
 It lets you register multiple implementations for a single function or
@@ -36,7 +36,7 @@ pip install dispatchbuilder
 To install from source:
 
 ```bash
-git clone https://github.com/your-username/dispatchbuilder.git
+git clone https://github.com/kairos-xx/dispatchbuilder.git
 cd dispatchbuilder
 pip install -e .
 ```
