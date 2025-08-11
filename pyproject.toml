@@ -27,7 +27,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/kairos-xx/wizedispatcher"
 Documentation = "https://github.com/kairos-xx/wizedispatcher/wiki"
-Repository = "https://github.com/kairos-xx/wizedispatcher"
+Repository = "https://github.com/kairos-xx/wizedispatcher.git"
 Issues = "https://github.com/kairos-xx/wizedispatcher/issues"
 
 [project.optional-dependencies]
