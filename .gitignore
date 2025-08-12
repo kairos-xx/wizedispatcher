@@ -12,3 +12,4 @@ replit.nix
 
 # Ignore working files
 .working/
+.pypirc

@@ -15,8 +15,8 @@ channel = "stable-23_11"
 language = "python3"
 
 [deployment]
-run = ["python3", "main.py"]
 deploymentTarget = "cloudrun"
+run = ["sh", "-c", "python main.py"]
 
 [env]
 PYTHONPATH = "$PYTHONPATH:$REPL_HOME/.pythonlibs/lib/python3.11/site-packages"

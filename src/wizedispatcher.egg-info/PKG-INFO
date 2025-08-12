@@ -1,33 +1,193 @@
 Metadata-Version: 2.4
 Name: wizedispatcher
-Version: 0.1.0
-Summary: Multiple-dispatch method and function overloading system with advanced type matching.
+Version: 0.1.2
+Summary: Runtime dispatch with decorator-based overload registration.
 Home-page: https://github.com/kairos-xx/wizedispatcher
 Author: Joao Lopes
-Author-email: joaoslopes@gmail.com
-License: MIT
-Keywords: dispatch multiple-dispatch overloading typing
-Classifier: Development Status :: 4 - Beta
-Classifier: Intended Audience :: Developers
-Classifier: License :: OSI Approved :: MIT License
+Author-email: Joao Lopes <joaoslopes@gmail.com>
+License: MIT License
+        
+        Copyright (c) 2025
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        
+Project-URL: Homepage, https://github.com/kairos-xx/wizedispatcher
+Project-URL: Documentation, https://github.com/kairos-xx/wizedispatcher/wiki
+Project-URL: Repository, https://github.com/kairos-xx/wizedispatcher.git
+Project-URL: Issues, https://github.com/kairos-xx/wizedispatcher/issues
+Keywords: dispatch,overload,typing,decorator
 Classifier: Programming Language :: Python :: 3
-Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3 :: Only
 Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
 Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Intended Audience :: Developers
 Classifier: Topic :: Software Development :: Libraries
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
+License-File: LICENSE
 Provides-Extra: dev
-Requires-Dist: pytest>=7.0; extra == "dev"
-Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Requires-Dist: pytest>=7; extra == "dev"
+Requires-Dist: ruff>=0.5; extra == "dev"
+Requires-Dist: mypy>=1.11; extra == "dev"
 Dynamic: author
-Dynamic: author-email
-Dynamic: classifier
-Dynamic: description-content-type
 Dynamic: home-page
-Dynamic: keywords
-Dynamic: license
-Dynamic: provides-extra
+Dynamic: license-file
 Dynamic: requires-python
-Dynamic: summary
+
+
+<div align="center">
+  <img src="https://github.com/kairos-xx/wizedispatcher/raw/main/resources/icon_raster.png" alt="Tree Interval Logo" width="150"/>
+    <h1>WizeDispatcher</h1>
+  <p><em>A lightweight, version-robust Python runtime dispatch library with powerful overload registration and type-based selection</em></p>
+
+  <a href="https://replit.com/@kairos/wizedispatcher">
+    <img src="https://github.com/kairos-xx/wizedispatcher/raw/main/resources/replit.png" alt="Try it on Replit" width="150"/>
+  </a>
+
+</div>
+
+## ✨ Features
+
+- 🎯 **Overload Registration via Decorators**  
+  Register multiple implementations for the same function, method, or property setter, with **keyword** or **positional** type constraints.
+
+- 📝 **Type Hint Overrides**  
+  Overloads can specify types in the decorator to **override** or **partially use** type hints from the function signature.
+
+- ⚙ **Partial Type Specification**  
+  Missing type constraints in an overload are automatically filled from the fallback/default implementation.
+
+- 📊 **Weighted Specificity Scoring**  
+  Runtime match scoring system:  
+    - `3` → Exact type match  
+    - `2` → Instance match  
+    - `1` → `Any` annotation match  
+    - `0` → Wildcard match (unspecified param)  
+    - `-1` → No match
+
+- 🛠 **Full Typing Support**  
+  `Union`, `Optional`, `Literal`, generic containers (`list[int]`, `tuple[int, ...]`), and callable detection.
+
+- 📦 **Method & Property Support**  
+  Works with instance methods, `@classmethod`, `@staticmethod`, and property setters.
+
+- 🚀 **Fast Cached Dispatch**  
+  Caches previous matches to speed up repeated calls.
+
+- 🧩 **Varargs & Kwargs Handling**  
+  Fully supports `*args` and `**kwargs` in overloads, resolving them according to parameter order.
+
+- 🐍 **Version Robust**  
+  Works consistently across Python 3.8+ with no dependencies.
+
+## 🚀 Quick Start
+
+```python
+from wizedispatcher import dispatch
+
+# Fallback
+def greet(name: object) -> str:
+    return f"Hello, {name}!"
+
+# Keyword constraint
+@dispatch.greet(name=str)
+def _(name: str) -> str:
+    return f"Hello, {name}, nice to meet you."
+
+# Positional constraint
+@dispatch.greet(str, int)
+def _(name, age) -> str:
+    return f"{name} is {age} years old"
+
+print(greet("Alice"))   # Hello, Alice, nice to meet you.
+print(greet("Bob", 30)) # Bob is 30 years old
+```
+
+## 📊 Weight-Based Evaluation
+
+WizeDispatcherevaluates overloads with a **specificity weight system**:
+
+| Weight | Meaning                      |
+|--------|------------------------------|
+| 3      | Exact type match              |
+| 2      | Instance match                |
+| 1      | Any annotation match          |
+| 0      | Wildcard (unspecified param)  |
+| -1     | No match (discarded)          |
+
+Example:  
+If two overloads match, the one with the **higher total weight** is chosen.
+
+## 🧩 Partial Type Specification
+
+```python
+# Default function defines all parameters
+def process(a: int, b: str, c: float) -> str:
+    return "default"
+
+# Overload defines only 'a', inherits 'b' and 'c' types from default
+@dispatch.process(a=str)
+def _(a: str, b, c) -> str:
+    return f"a is str, b is {type(b)}, c is {type(c)}"
+```
+
+## 🛠 Methods & Properties
+
+```python
+class Converter:
+    @property
+    def value(self) -> int:
+        return self._value
+
+    @value.setter
+    def value(self, val: object) -> None:
+        self._value = val  # fallback setter
+
+    @dispatch.value(value=int)
+    def _(self, value: int) -> None:
+        self._value = value * 10
+
+    @dispatch.value(value=str)
+    def _(self, value: str) -> None:
+        self._value = int(value)
+
+c = Converter()
+c.value = 3
+print(c.value)  # 30
+c.value = "7"
+print(c.value)  # 7
+```
+
+## 📦 Installation
+
+```bash
+pip install wizedispatcher
+```
+
+## 📚 Documentation
+
+- **Wiki**: Complete documentation in `/wizedispatcher_wiki`
+- **Examples**: Ready-to-run demos in `/demo`
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file.
