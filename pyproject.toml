@@ -36,17 +36,14 @@ dev = [
   "mypy>=1.11",
 ]
 
-
 [tool.poetry]
-name = "wizedispatssscher"
+name = "wizedispatcher"
 version = "0.1.3"
 description = ""
 authors = ["Joao Lopes <joaoslopes@gmail.com>"]
 
 [tool.poetry.dependencies]
-# Note: poetry installs packages for python 3.11.3, but the python version
-# in use is actually 3.12.0, which may cause errors on certain packages.
-python = ">=3.11.0,<4.0"
+python = ">=3.9"
 
 [tool.pyright]
 # https://github.com/microsoft/pyright/blob/main/docs/configuration.md
