@@ -9,8 +9,6 @@ src/wizedispatcher.egg-info/SOURCES.txt
 src/wizedispatcher.egg-info/dependency_links.txt
 src/wizedispatcher.egg-info/requires.txt
 src/wizedispatcher.egg-info/top_level.txt
-src/wizedispatcher.egg-info/wizedispatcher/__init__.py
-src/wizedispatcher.egg-info/wizedispatcher/core.py
 tests/test_abc_and_edge_cases.py
 tests/test_basic.py
 tests/test_collections_and_sets.py

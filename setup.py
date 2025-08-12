@@ -9,7 +9,7 @@ long_description: str = (readme_path.read_text(
 
 setup(
     name="wizedispatcher",
-    version="0.1.3",
+    version="0.1.4",
     author="Joao Lopes",
     author_email="joaoslopes@gmail.com",
     description=("Multiple-dispatch method and function overloading system "
