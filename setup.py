@@ -3,8 +3,7 @@ from pathlib import Path
 from setuptools import find_packages, setup
 
 # Read README if available
-this_dir: Path = Path(__file__).parent
-readme_path: Path = this_dir / "README.md"
+readme_path: Path = Path(__file__).parent / "README.md"
 long_description: str = (readme_path.read_text(
     encoding="utf-8") if readme_path.exists() else "")
 
