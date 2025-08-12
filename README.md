@@ -66,14 +66,71 @@ print(greet("Alice"))   # Hello, Alice, nice to meet you.
 print(greet("Bob", 30)) # Bob is 30 years old
 ```
 
-## 3. 📊 Weight-Based Evaluation
 
-### 3.1 Matching and Scoring Overview
+## 3. 🎯 How Type Constraints Are Determined
+
+When deciding which types to use for overload matching, **WizeDispatcher**
+follows a strict precedence order. This allows you to be as explicit or as
+implicit as you like when defining overloads.
+
+### 3.1 No decorator arguments
+
+```python
+@dispatch.func
+def _(a: int, b: str) -> None:
+    ...
+```
+If the decorator has **no arguments**, the type hints are taken **directly**
+from the overload function’s own signature.
+
+### 3.2 Decorator with arguments
+
+```python
+@dispatch.func(a=str)
+def _(a: int, b: str) -> None:
+    ...
+```
+If the decorator **has arguments**, those override the type hints for the
+specified parameters, **ignoring** the overload function's own hints for those
+parameters.
+
+### 3.3 Missing arguments in both decorator and overload
+
+```python
+# Default (fallback) function defines all parameters
+def func(a: int, b: str) -> None:
+    ...
+
+# Overload defines only 'a' in the decorator, leaves 'b' undefined
+@dispatch.func(a=str)
+def _(a, b) -> None:
+    ...
+```
+If a parameter is **missing** from both the decorator arguments **and** the
+overload function’s type hints, WizeDispatcher uses the type hint from the
+**default (fallback) function**.
+
+### Summary Table
+
+| Source                              | Priority |
+|-------------------------------------|----------|
+| Decorator arguments                 | Highest  |
+| Overload function's type hints      | Medium   |
+| Default function's type hints       | Lowest   |
+
+This precedence ensures that you can:
+- Override only what you need without redefining all types.
+- Inherit defaults from the fallback function.
+- Use explicit decorator arguments when you want to fully control matching.
+
+## 4. 📊 Weight-Based Evaluation
+
+### 4.1 Matching and Scoring Overview
 
 WizeDispatcher first **filters** overloads by type **compatibility** and then
 **scores** the remaining candidates to pick the most specific one.
 
-#### 3.1.1 Compatibility filter
+#### 4.1.1 Compatibility filter
 
 For each parameter in dispatch order, the runtime value must match the
 overload’s **effective hint**. Matching supports:
@@ -87,7 +144,7 @@ overload’s **effective hint**. Matching supports:
 > If an overload defines a default for a parameter and the caller omitted it,
 > the **default value** is used as the value to match/score for that parameter.
 
-#### 3.1.2 Scoring the compatible candidates
+#### 4.1.2 Scoring the compatible candidates
 
 For each parameter, we compute:
 
@@ -130,7 +187,7 @@ Below is a compact view of the core heuristic used by
 > **Note:** The extra **+40 / +20** bonus per param encourages overloads that
 > *declare* types (even loosely) over ones that leave things unconstrained.
 
-### 3.2 Example (why one wins)
+### 4.2 Example (why one wins)
 
 ```python
 # Fallback
@@ -154,15 +211,15 @@ A call `greet("Alice")`:
 
 → The `name=str` overload’s total is higher, so it wins.
 
-### 3.3 Caching
+### 4.3 Caching
 
 Selections are cached by the **tuple of runtime parameter types** (in dispatch
 order) for fast repeat calls.
 
 
-## 4. 📐 Type Resolution Precedence
+## 5. 📐 Type Resolution Precedence
 
-### 4.1 Precedence Rules Overview
+### 5.1 Precedence Rules Overview
 
 WizeDispatcher determines the **effective type** for each parameter using a
 clear, three-tier precedence. This governs what is matched and scored.
@@ -183,12 +240,12 @@ clear, three-tier precedence. This governs what is matched and scored.
    - If the default is also missing an annotation, that param becomes a
      **wildcard** (matches anything) and scores accordingly.
 
-#### 3.1.4 TL;DR Summary
+#### 5.1.4 TL;DR Summary
 **Decorator > Overload function annotations > Default function annotations > Wildcard**
 
 ---
 
-### 4.2 Case 1 — Bare decorator uses overload annotations — Bare decorator: use **overload function annotations**
+### 5.2 Case 1 — Bare decorator uses overload annotations — Bare decorator: use **overload function annotations**
 
 ```python
 from wizedispatcher import dispatch
@@ -211,7 +268,7 @@ print(process(1, "hi", 2.0))   # ➜ falls back (b is str, not bytes)
 
 ---
 
-### 4.3 Case 2 — Decorator overrides overload annotations — Decorator **overrides** overload annotations
+### 5.3 Case 2 — Decorator overrides overload annotations — Decorator **overrides** overload annotations
 
 ```python
 from wizedispatcher import dispatch
@@ -250,7 +307,7 @@ annotations for the covered parameters.
 
 ---
 
-### 4.4 Case 3 — Missing on both decorator and overload → use default — Missing on both decorator and overload → **use default**
+### 5.4 Case 3 — Missing on both decorator and overload → use default — Missing on both decorator and overload → **use default**
 
 ```python
 from wizedispatcher import dispatch
@@ -273,7 +330,7 @@ print(process("x", 123, 1.0))      # ➜ fallback
 
 **Wildcard note:** If the default also lacks an annotation for a parameter,
 that parameter becomes a **wildcard** (matches anything but is scored as such).
-## 5. 🧩 Partial Type Specification
+## 6. 🧩 Partial Type Specification
 
 ```python
 # Default function defines all parameters
@@ -286,7 +343,7 @@ def _(a: str, b, c) -> str:
     return f"a is str, b is {type(b)}, c is {type(c)}"
 ```
 
-## 6. 🛠 Methods & Properties
+## 7. 🛠 Methods & Properties
 
 ```python
 class Converter:
@@ -313,75 +370,18 @@ c.value = "7"
 print(c.value)  # 7
 ```
 
-## 7. 📦 Installation
+## 8. 📦 Installation
 
 ```bash
 pip install wizedispatcher
 ```
 
-## 8. 📚 Documentation
+## 9. 📚 Documentation
 
 - **Wiki**: Complete documentation in `/wizedispatcher_wiki`
 - **Examples**: Ready-to-run demos in `/demo`
 
-## 9. 📝 License
+## 10. 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file.
-
-
-## 🎯 How Type Constraints Are Determined
-
-When deciding which types to use for overload matching, **WizeDispatcher**
-follows a strict precedence order. This allows you to be as explicit or as
-implicit as you like when defining overloads.
-
-#### 3.1.1 No decorator arguments
-
-```python
-@dispatch.func
-def _(a: int, b: str) -> None:
-    ...
-```
-If the decorator has **no arguments**, the type hints are taken **directly**
-from the overload function’s own signature.
-
-#### 3.1.2 Decorator with arguments
-
-```python
-@dispatch.func(a=str)
-def _(a: int, b: str) -> None:
-    ...
-```
-If the decorator **has arguments**, those override the type hints for the
-specified parameters, **ignoring** the overload function's own hints for those
-parameters.
-
-#### 3.1.3 Missing arguments in both decorator and overload
-
-```python
-# Default (fallback) function defines all parameters
-def func(a: int, b: str) -> None:
-    ...
-
-# Overload defines only 'a' in the decorator, leaves 'b' undefined
-@dispatch.func(a=str)
-def _(a, b) -> None:
-    ...
-```
-If a parameter is **missing** from both the decorator arguments **and** the
-overload function’s type hints, WizeDispatcher uses the type hint from the
-**default (fallback) function**.
-
-### Summary Table
-
-| Source                              | Priority |
-|-------------------------------------|----------|
-| Decorator arguments                 | Highest  |
-| Overload function's type hints      | Medium   |
-| Default function's type hints       | Lowest   |
-
-This precedence ensures that you can:
-- Override only what you need without redefining all types.
-- Inherit defaults from the fallback function.
-- Use explicit decorator arguments when you want to fully control matching.
 
