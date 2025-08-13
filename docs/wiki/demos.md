@@ -1,6 +1,6 @@
 # Demos
 
-The `demo` directory contains small programs that exercise the
+The `demos` directory contains small programs that exercise the
 features of WizeDispatcher. Each script can be run directly. To
 run all demos sequentially, use the following helper script:
 
@@ -13,7 +13,7 @@ import sys
 
 def run_all_demos() -> None:
     """Find and run all Python demo scripts sequentially."""
-    demo_dir: Path = Path(__file__).parent / "demo"
+    demo_dir: Path = Path(__file__).parent / "demos"
     for file in sorted(demo_dir.glob("*.py")):
         print(f"== Running {file.name} ==")
         subprocess.run([sys.executable, str(file)], check=True)
@@ -25,11 +25,11 @@ if __name__ == "__main__":
 
 Save this script in the root of your project (for example as
 `run_demos.py`), ensure it is executable, and run it with Python.
-The script locates every `.py` file in the `demo` directory, sorts
+The script locates every `.py` file in the `demos` directory, sorts
 them alphabetically, and executes them one after another. Errors
 in one demo do not prevent later demos from running.
 
-The typical contents of the `demo` directory include:
+The typical contents of the `demos` directory include:
 
 | Demo file | Description |
 |---|---|

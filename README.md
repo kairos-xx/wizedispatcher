@@ -1,387 +1,464 @@
 <div align="center">
-  <img src="https://github.com/kairos-xx/wizedispatcher/raw/main/resources/icon_raster.png" alt="Tree Interval Logo" width="150"/>
-    <h1>WizeDispatcher</h1>
-  <p><em>A lightweight, version-robust Python runtime dispatch library with powerful overload registration and type-based selection</em></p>
+  <img src="https://github.com/kairos-xx/wizedispatcher/raw/main/resources/icon_raster.png" alt="WizeDispatcher Logo" width="140"/>
+  <h1>WizeDispatcher</h1>
+  <p><em>Runtime multiple dispatch for Python — precise, fast, and ergonomic.<br/>Typed overloads for functions, methods, and <strong>property setters</strong>.</em></p>
 
   <a href="https://replit.com/@kairos/wizedispatcher">
     <img src="https://github.com/kairos-xx/wizedispatcher/raw/main/resources/replit.png" alt="Try it on Replit" width="150"/>
   </a>
-
 </div>
 
-## 1. ✨ Features
+> Zero dependencies · Python 3.8+ · Works with `typing`/PEP 604 · Structure-aware caching
 
-- 🎯 **Overload Registration via Decorators**  
-  Register multiple implementations for the same function, method, or property setter, with **keyword** or **positional** type constraints.
+---
 
-- 📝 **Type Hint Overrides**  
-  Overloads can specify types in the decorator to **override** or **partially use** type hints from the function signature.
+## Table of Contents
 
-- ⚙ **Partial Type Specification**  
-  Missing type constraints in an overload are automatically filled from the fallback/default implementation.
+1. [Why WizeDispatcher](#1-why-wizedispatcher)  
+2. [Quick Start](#2-quick-start)  
+3. [Declaring Overloads](#3-declaring-overloads)  
+   - [Precedence of Types](#31-precedence-of-types)  
+   - [Positional vs Keyword Decorators](#32-positional-vs-keyword-decorators)  
+   - [Partial Specs & Fallback Fill-In](#33-partial-specs--fallback-fill-in)  
+4. [Dispatch Semantics](#4-dispatch-semantics)  
+   - [Compatibility Filtering](#41-compatibility-filtering)  
+   - [Specificity Scoring](#42-specificity-scoring)  
+   - [Structure-Aware Caching](#43-structure-aware-caching)  
+5. [Using With Methods](#5-using-with-methods)  
+   - [Instance Methods](#51-instance-methods)  
+   - [Class & Static Methods](#52-class--static-methods)  
+6. [Property Setter Dispatch](#6-property-setter-dispatch)  
+7. [Varargs & Kwargs Patterns](#7-varargs--kwargs-patterns)  
+8. [Typing Power-Ups](#8-typing-power-ups)  
+9. [Performance](#9-performance)  
+10. [Comparisons](#10-comparisons)  
+11. [Use Cases](#11-use-cases)  
+12. [API Notes & Best Practices](#12-api-notes--best-practices)  
+13. [Installation](#13-installation) · [License](#14-license)
 
-- 📊 **Weighted Specificity Scoring**  
-  Runtime match scoring system is heuristic-based and typing-aware (see Weight-Based Evaluation).
+---
 
-- 🛠 **Full Typing Support**  
-  `Union`, `Optional`, `Literal`, generic containers (`list[int]`, `tuple[int, ...]`), and callable detection.
+## 1) Why WizeDispatcher
 
-- 📦 **Method & Property Support**  
-  Works with instance methods, `@classmethod`, `@staticmethod`, and property setters.
+- **Precise**: Honors modern typing (`Union`/PEP 604, `Annotated`, `Literal`, `Type[T]`, containers, callable shapes, TypedDict-like, runtime protocols).  
+- **Fast**: One-time selection per call shape; subsequent calls hit a **structure-aware cache**.  
+- **Ergonomic**: Simple decorators, no metaclass tricks, no custom dunder protocols.  
+- **Complete**: Works on free functions, methods, class/static methods, and **property setters**.  
+- **Deterministic**: Hard type checks first, then a transparent specificity score.
 
-- 🚀 **Fast Cached Dispatch**  
-  Caches previous matches to speed up repeated calls.
+[Back to top ↑](#table-of-contents)
 
-- 🧩 **Varargs & Kwargs Handling**  
-  Fully supports `*args` and `**kwargs` in overloads, resolving them according to parameter order.
+---
 
-- 🐍 **Version Robust**  
-  Works consistently across Python 3.8+ with no dependencies.
-
-
-
-
-## 2. 🚀 Quick Start
-
-### 2.1 Basic Usage Example
+## 2) Quick Start
 
 ```python
 from wizedispatcher import dispatch
 
-# Fallback
+# Fallback (kept as a callable and used when no overload matches)
 def greet(name: object) -> str:
     return f"Hello, {name}!"
 
-# Keyword constraint
+# Overload using keyworded decorator args
 @dispatch.greet(name=str)
 def _(name: str) -> str:
     return f"Hello, {name}, nice to meet you."
 
-# Positional constraint
+# Overload using positional decorator args (map by parameter order)
 @dispatch.greet(str, int)
 def _(name, age) -> str:
-    return f"{name} is {age} years old"
+    return f\"{name} is {age} years old\"
 
-print(greet("Alice"))   # Hello, Alice, nice to meet you.
-print(greet("Bob", 30)) # Bob is 30 years old
+print(greet(\"Ada\"))     # → str overload
+print(greet(\"Bob\", 30)) # → (str, int) overload
 ```
 
+[Back to top ↑](#table-of-contents)
 
-## 3. 🎯 How Type Constraints Are Determined
+---
 
-When deciding which types to use for overload matching, **WizeDispatcher**
-follows a strict precedence order. This allows you to be as explicit or as
-implicit as you like when defining overloads.
+## 3) Declaring Overloads
 
-### 3.1 No decorator arguments
+### 3.1 Precedence of Types
 
-```python
-@dispatch.func
-def _(a: int, b: str) -> None:
-    ...
-```
-If the decorator has **no arguments**, the type hints are taken **directly**
-from the overload function’s own signature.
+Effective type per parameter is resolved in this order:
 
-### 3.2 Decorator with arguments
+**Decorator args** ➜ **Overload annotations** ➜ **Fallback annotations** ➜ **Wildcard**
 
 ```python
-@dispatch.func(a=str)
-def _(a: int, b: str) -> None:
-    ...
-```
-If the decorator **has arguments**, those override the type hints for the
-specified parameters, **ignoring** the overload function's own hints for those
-parameters.
+def f(a: int, b: str) -> None: ...    # fallback
 
-### 3.3 Missing arguments in both decorator and overload
-
-```python
-# Default (fallback) function defines all parameters
-def func(a: int, b: str) -> None:
+@dispatch.f               # uses overload annotations
+def _(a: int, b: bytes) -> None:    # effective: a=int, b=bytes
     ...
 
-# Overload defines only 'a' in the decorator, leaves 'b' undefined
-@dispatch.func(a=str)
+@dispatch.f(b=bytes)      # decorator overrides only 'b'
+def _(a: int, b: str) -> None:    # effective: a=int (fn), b=bytes (decorator)
+    ...
+
+@dispatch.f(int, bytes)   # positional mapping by parameter order
 def _(a, b) -> None:
     ...
 ```
-If a parameter is **missing** from both the decorator arguments **and** the
-overload function’s type hints, WizeDispatcher uses the type hint from the
-**default (fallback) function**.
 
-### Summary Table
+### 3.2 Positional vs Keyword Decorators
 
-| Source                              | Priority |
-|-------------------------------------|----------|
-| Decorator arguments                 | Highest  |
-| Overload function's type hints      | Medium   |
-| Default function's type hints       | Lowest   |
+- **Positional**: `@dispatch.func(int, str)` → (`param0=int`, `param1=str`, …)  
+- **Keyword**: `@dispatch.func(x=int, y=str)` → named mapping; best for clarity and defaults.
 
-This precedence ensures that you can:
-- Override only what you need without redefining all types.
-- Inherit defaults from the fallback function.
-- Use explicit decorator arguments when you want to fully control matching.
+### 3.3 Partial Specs & Fallback Fill-In
 
-## 4. 📊 Weight-Based Evaluation
-
-### 4.1 Matching and Scoring Overview
-
-WizeDispatcher first **filters** overloads by type **compatibility** and then
-**scores** the remaining candidates to pick the most specific one.
-
-#### 4.1.1 Compatibility filter
-
-For each parameter in dispatch order, the runtime value must match the
-overload’s **effective hint**. Matching supports:
-
-- `Union | PEP 604`, `Optional`, `Literal`, `Annotated`, `ClassVar`
-- `Type[T]` / `type`, protocols (runtime), `TypedDict`-like classes
-- Callables with parameter shapes, containers (`list/tuple/dict/set/...`)
-- `TypeVar` / `ParamSpec` (constraints/bounds respected)
-
-> **Overload defaults participate in matching:**  
-> If an overload defines a default for a parameter and the caller omitted it,
-> the **default value** is used as the value to match/score for that parameter.
-
-#### 4.1.2 Scoring the compatible candidates
-
-For each parameter, we compute:
-
-```
-score += specificity(value, hint)
-score += (40 if hint is not Any/object/WILDCARD else 20)
-```
-
-Then we apply a small **penalty** if the overload uses `*args`:
-
-```
-score -= 2  # has VAR_POSITIONAL
-```
-
-Finally, the overload with the **highest total score** wins. If multiple
-overloads tie, the one **registered first** remains selected (deterministic).
-If no overload is compatible, the **original (fallback)** is called.
-
-#### Specificity highlights (per-parameter)
-
-Below is a compact view of the core heuristic used by
-`_type_specificity_score(value, hint)`:
-
-| Hint shape                           | Specificity (approx)                  |
-|-------------------------------------|---------------------------------------|
-| `Literal[...]`                      | **100**                               |
-| `Annotated[T, ...]`                 | `1 + specificity(value, T)`           |
-| `ClassVar[T]`                       | `specificity(value, T)`               |
-| `Union[T1, T2, ...]`                | `max(specificity(...)) - len(Union)`  |
-| `Type[T]` / `type[T]`               | `15 + specificity(value, T)`          |
-| Bare `Type` / `type`                | `8`                                   |
-| `Callable[[args...], ...]`          | `12 + Σ specificity(arg_i)`           |
-| `Mapping[K, V]` / `dict[K, V]`      | `20 + specificity(K) + specificity(V)`|
-| `Sequence[T]` / iterables           | `16` (unparam) or `18 + spec(T)`      |
-| Concrete container w/ params        | `20 + Σ specificity(param_i)`         |
-| Unparameterized `Tuple/List/Dict`   | `10`                                  |
-| Concrete class `C`                  | `5 + max(0, 50 - mro_distance(value, C))` |
-| `Any`, `object`, or `WILDCARD`      | `0`                                   |
-
-> **Note:** The extra **+40 / +20** bonus per param encourages overloads that
-> *declare* types (even loosely) over ones that leave things unconstrained.
-
-### 4.2 Example (why one wins)
+If a param is unspecified in both decorator and overload, it **inherits** the fallback’s annotation:
 
 ```python
-# Fallback
-def greet(name: object) -> str: ...
+def process(a: int, b: str, c: float) -> None: ...
 
-@dispatch.greet(name=str)          # declares a concrete type for 'name'
-def _(name: str) -> str: ...
-
-@dispatch.greet(Any)               # explicitly Any
-def _(name) -> str: ...
+@dispatch.process(a=str)   # no info for 'b' here
+def _(a, b, c: float) -> None:     # no annotation for 'b' either
+    ...                    # effective: a=str (dec), b=str (fallback), c=float (fn)
 ```
 
-A call `greet("Alice")`:
-
-- `name=str` overload:
-  - Specificity for `str` with value `"Alice"`: high (concrete class match)
-  - +40 bonus for a concrete (non-Any) hint
-- `name=Any` overload:
-  - Specificity: 0
-  - +20 bonus (declared but Any)
-
-→ The `name=str` overload’s total is higher, so it wins.
-
-### 4.3 Caching
-
-Selections are cached by the **tuple of runtime parameter types** (in dispatch
-order) for fast repeat calls.
-
-
-## 5. 📐 Type Resolution Precedence
-
-### 5.1 Precedence Rules Overview
-
-WizeDispatcher determines the **effective type** for each parameter using a
-clear, three-tier precedence. This governs what is matched and scored.
-
-1) **Decorator overrides function annotations**  
-   - `@dispatch.func(a=int)` means: for parameter `a`, **use `int`** even if
-     the overload function annotates something else (e.g., `a: str`).  
-   - Positional decorator args map by parameter order:
-     `@dispatch.func(int, str)` → first param `int`, second `str`.
-
-2) **If the decorator omits a param, use the overload function annotation**  
-   - Example: overload is `def _(a: str, b: bytes) -> ...` and decorator
-     is `@dispatch.func(a=int)`. Effective types → `a=int` (override),
-     `b=bytes` (from function).
-
-3) **If both decorator and overload omit a param, fall back to the default**  
-   - The **default (original) function** annotations fill any remaining gaps.
-   - If the default is also missing an annotation, that param becomes a
-     **wildcard** (matches anything) and scores accordingly.
-
-#### 5.1.4 TL;DR Summary
-**Decorator > Overload function annotations > Default function annotations > Wildcard**
+[Back to top ↑](#table-of-contents)
 
 ---
 
-### 5.2 Case 1 — Bare decorator uses overload annotations — Bare decorator: use **overload function annotations**
+## 4) Dispatch Semantics
 
-```python
-from wizedispatcher import dispatch
+### 4.1 Compatibility Filtering
+Before scoring, each overload must pass a **hard** runtime check against its effective type hints. Supported patterns include:
 
-# Default (fallback) function
-def process(a: int, b: str, c: float) -> str:
-    return f"default: a={a!r}, b={b!r}, c={c!r}"
+- `Union` / PEP 604 (`int | str`), `Optional[T]`  
+- `Annotated[T, meta...]`, `Literal[\"a\", 3]`, `ClassVar[T]`  
+- `Type[T]` / `type[T]`, runtime protocols (`typing.Protocol` with `runtime_checkable`)  
+- Callable shapes (`Callable[[int, str], X]`)  
+- Containers & iterables (`list[int]`, `tuple[int, ...]`, `Mapping[K, V]`, `Sequence[T]`)  
+- `TypeVar` / `ParamSpec` (constraints/bounds observed)  
+- TypedDict-like classes (required/optional keys honored)
 
-# Bare decorator → takes annotations from the overload itself
-@dispatch.process
-def _(a: int, b: bytes, c: float) -> str:
-    return f"overload1: b_is={type(b).__name__}"
+### 4.2 Specificity Scoring
+Compatible overloads are scored per parameter:
 
-print(process(1, b"hi", 2.0))  # ✅ matches overload (b: bytes)
-print(process(1, "hi", 2.0))   # ➜ falls back (b is str, not bytes)
-```
+- Base **specificity** heuristic (concrete classes > Any; `Literal` very strong; container shapes add weight).
+- **+40** if the hint is concrete (not `Any/object/wildcard`), else **+20** if declared but generic.  
+- **+25** for each **declared** param satisfied (declared via decorator or annotation).  
+- **−15** for provided named keys captured only via `**kwargs`.  
+- **−1** if the overload declares `*args`; **−1** if it declares `**kwargs`.
 
-**Why:** No decorator args were provided, so the overload’s own annotations
-(`b: bytes`) are the effective constraint for matching.
+The highest total wins; registration order breaks ties.
 
----
+### 4.3 Structure-Aware Caching
+Selections are cached by a key that reflects both types **and** call shape:
 
-### 5.3 Case 2 — Decorator overrides overload annotations — Decorator **overrides** overload annotations
+- Regular params → `type(value)`  
+- `*args` → `(tuple, len(*args))`  
+- `**kwargs` → `(dict, tuple(sorted(kwargs.keys())))`
 
-```python
-from wizedispatcher import dispatch
+This prevents cache collisions between e.g. `(x=1)` vs `(x=1,y=2)` or different kwargs sets.
 
-def process(a: int, b: str, c: float) -> str:
-    return "default"
-
-# Decorator forces a=str, overriding the overload's (a: int)
-@dispatch.process(a=str)
-def _(a: int, b: bytes, c: float) -> str:
-    return "overload2"
-
-print(process("x", b"y", 1.0))  # ✅ matches overload (a must be str)
-print(process(1, b"y", 1.0))    # ➜ fallback (a is int, but decorator requires str)
-```
-
-**Positional decorator example** (maps by parameter order):
-
-```python
-from wizedispatcher import dispatch
-
-def process(a: int, b: str, c: float) -> str:
-    return "default"
-
-# Positional mapping → a=str, b=bytes, c=float
-@dispatch.process(str, bytes, float)
-def _(a, b, c) -> str:
-    return "overload3"
-
-print(process("x", b"y", 1.0))  # ✅ matches overload3
-print(process("x", "y", 1.0))   # ➜ fallback (b is str, expected bytes)
-```
-
-**Why:** When decorator arguments exist, they **override** the overload’s
-annotations for the covered parameters.
+[Back to top ↑](#table-of-contents)
 
 ---
 
-### 5.4 Case 3 — Missing on both decorator and overload → use default — Missing on both decorator and overload → **use default**
+## 5) Using With Methods
+
+### 5.1 Instance Methods
+
+```python
+from typing import Any, Callable
+from wizedispatcher import dispatch
+
+class T:
+    # Fallback
+    def m(self, x: Any, y: Callable[..., Any]) -> str:
+        return "FB"
+
+    @dispatch.m
+    def _(self, x: int, y: int) -> str:
+        return "int,int"
+
+    @dispatch.m
+    def _(self, x: str, y: str) -> str:
+        return "str,str"
+
+    # Decorator enforces x=float; overload annotates y=float
+    @dispatch.m(x=float)
+    def _(self, y: float) -> str:
+        return "float,float"
+
+    # Positional decorator: (bool, bool)
+    @dispatch.m(bool, bool)
+    def _(self) -> str:
+        return "bool,bool"
+
+    # First param is Callable (decorator); y inherits Callable from fallback
+    @dispatch.m(Callable)
+    def _(self) -> str:
+        return "callable,callable"
+```
+
+### 5.2 Class & Static Methods
+
+Decorator order around `@classmethod` / `@staticmethod` is flexible.
+
+```python
+class U:
+    @classmethod
+    def cm(cls, x: object, y: object) -> str:  # fallback
+        return "FB cm"
+
+    @dispatch.cm
+    @classmethod
+    def _(cls, x: int, y: int) -> str:
+        return "cm int,int"
+
+    @classmethod
+    @dispatch.cm
+    def _(cls, x: str, y: str) -> str:
+        return "cm str,str"
+
+    @staticmethod
+    def sm(x: object, y: object) -> str:       # fallback
+        return "FB sm"
+
+    @dispatch.sm
+    @staticmethod
+    def _(x: int, y: int) -> str:
+        return "sm int,int"
+
+    @staticmethod
+    @dispatch.sm
+    def _(x: str, y: str) -> str:
+        return "sm str,str"
+```
+
+[Back to top ↑](#table-of-contents)
+
+---
+
+## 6) Property Setter Dispatch
+
+Decorate the property name on `dispatch` to add typed setter overloads:
 
 ```python
 from wizedispatcher import dispatch
 
-# Default provides types for all params
-def process(a: int, b: str, c: float) -> str:
-    return "default"
-
-# Decorator sets only 'a', overload omits annotation for 'b'
-@dispatch.process(a=str)       # no info for 'b' here
-def _(a: int, b, c: float) -> str:  # no type for 'b' here either
-    return "overload4"
-
-print(process("x", "hello", 1.0))  # ✅ matches overload4
-#   effective types: a=str (decorator), b=str (from default), c=float (overload)
-
-print(process("x", 123, 1.0))      # ➜ fallback
-#   'b' is int — default says 'b: str', so overload4 is incompatible
-```
-
-**Wildcard note:** If the default also lacks an annotation for a parameter,
-that parameter becomes a **wildcard** (matches anything but is scored as such).
-## 6. 🧩 Partial Type Specification
-
-```python
-# Default function defines all parameters
-def process(a: int, b: str, c: float) -> str:
-    return "default"
-
-# Overload defines only 'a', inherits 'b' and 'c' types from default
-@dispatch.process(a=str)
-def _(a: str, b, c) -> str:
-    return f"a is str, b is {type(b)}, c is {type(c)}"
-```
-
-## 7. 🛠 Methods & Properties
-
-```python
 class Converter:
+    def __init__(self) -> None:
+        self._v = 0
+
     @property
-    def value(self) -> int:
-        return self._value
+    def v(self) -> int:
+        return self._v
 
-    @value.setter
-    def value(self, val: object) -> None:
-        self._value = val  # fallback setter
+    @v.setter
+    def v(self, value) -> None:
+        # Fallback setter: accept anything
+        self._v = value
 
-    @dispatch.value(value=int)
-    def _(self, value: int) -> None:
-        self._value = value * 10
-
-    @dispatch.value(value=str)
+    # Overloaded setter: when 'value' is str, store its length instead
+    @dispatch.v(value=str)
     def _(self, value: str) -> None:
-        self._value = int(value)
+        self._v = len(value)
 
 c = Converter()
-c.value = 3
-print(c.value)  # 30
-c.value = "7"
-print(c.value)  # 7
+c.v = 3          # uses fallback setter → _v = 3
+c.v = "hello"    # uses str-overload   → _v = 5
 ```
 
-## 8. 📦 Installation
+[Back to top ↑](#table-of-contents)
+
+---
+
+## 7) Varargs & Kwargs Patterns
+
+Choose the overload that best reflects call shape and types:
+
+```python
+from typing import Any, Dict
+from wizedispatcher import dispatch
+
+def handle(x: Any, *args: Any, **kwargs: Any) -> str:
+    return "FB"
+
+@dispatch.handle
+def _(x: int, y: int) -> str:
+    return "x:int, y:int"
+
+@dispatch.handle
+def _(x: int, *args: Any) -> str:
+    return "x:int, *args"
+
+@dispatch.handle
+def _(x: int, **kwargs: Dict[str, Any]) -> str:
+    return "x:int, **kwargs"
+```
+
+[Back to top ↑](#table-of-contents)
+
+---
+
+## 8) Typing Power-Ups
+
+```python
+from typing import Callable, Literal, Sequence, Mapping, TypedDict, runtime_checkable, Protocol
+
+# Callable with parameter shape
+def act(x: Callable[[int, str], object]) -> str: return "FB"
+
+@dispatch.act
+def _(x: Callable[[int, str], object]) -> str: return "callable-shaped"
+
+# Literal
+@dispatch.act(x=Literal["go", "stop"])
+def _(x: str) -> str: return f"literal={x}"
+
+# Sequences & containers
+@dispatch.act(x=Sequence[int])
+def _(x) -> str: return "seq[int]"
+
+@dispatch.act(x=Mapping[str, int])
+def _(x) -> str: return "map[str,int]"
+
+# TypedDict-like
+class User(TypedDict):
+    name: str
+    age: int
+
+@dispatch.act(x=User)
+def _(x) -> str: return "user-td"
+
+# Runtime protocol
+@runtime_checkable
+class Named(Protocol):
+    @property
+    def name(self) -> str: ...
+
+@dispatch.act(x=Named)
+def _(x) -> str: return f"Named: {x.name}"
+```
+
+[Back to top ↑](#table-of-contents)
+
+---
+
+## 9) Performance
+
+### Model
+- **Cold path**: O(#overloads) — bind once, hard-filter, score compatible candidates.  
+- **Hot path**: **O(1)** — structure-aware cache hit.  
+- Cache key: `tuple(type/shape per param, (*args length), (**kwargs key set))`.
+
+### Micro-benchmark Harness
+Run this snippet locally to measure warm vs cold behavior:
+
+```python
+import timeit
+from typing import Any
+from wizedispatcher import dispatch
+
+def f(x: Any, y: Any = 0, **kw): return 0  # fallback
+
+@dispatch.f
+def _(x: int, y: int): return 1
+
+@dispatch.f
+def _(x: float, y: float): return 2
+
+@dispatch.f
+def _(x: str, y: str): return 3
+
+def run(n=100_000):
+    # warm-up (populate cache)
+    for _ in range(10_000): f(1, 2); f(1.0, 2.0); f("a", "b")
+
+    t_hot = timeit.timeit("f(1, 2); f(1.0, 2.0); f('a','b')", globals=globals(), number=n)
+    t_cold = timeit.timeit("f(1, 2)", globals=globals(), number=10_000)  # quick cold probe
+
+    print(f"hot per call: {t_hot/(3*n):.3e}s")
+    print(f"cold probe avg: {t_cold/10_000:.3e}s")
+
+if __name__ == "__main__":
+    run()
+```
+
+**What to expect (indicative):**
+- Hot calls in the **low tens of nanoseconds to microseconds** range depending on Python version and machine.  
+- Cold path scales linearly with the number and complexity of overloads.
+
+### Tips for speed
+- Prefer narrower, explicit types (less to score; faster cache warm-up).  
+- Group common shapes first (they’ll dominate caches).  
+- Avoid registering overloads dynamically at high frequency.
+
+[Back to top ↑](#table-of-contents)
+
+---
+
+## 10) Comparisons
+
+| Capability / Library                            | **WizeDispatcher** | `functools.singledispatch` | `multipledispatch` (lib) | `multimethod` (lib) | `plum` (lib) |
+|---|:--:|:--:|:--:|:--:|:--:|
+| Multiple params (true multiple dispatch)         | ✅ | ❌ (single param) | ✅ | ✅ | ✅ |
+| Works on methods                                 | ✅ | ➖ (`singledispatchmethod` only) | ✅ | ✅ | ✅ |
+| **Property setter** overloads                    | ✅ | ❌ | ❌ | ➖ (usually manual) | ➖ |
+| Decorator precedence (override vs annotations)   | ✅ | ➖ | ➖ | ➖ | ✅ |
+| Hard type filter + scoring                       | ✅ | ➖ | varies | varies | ✅ |
+| Callable shape matching                           | ✅ | ❌ | varies | varies | ✅ |
+| TypedDict-like, runtime protocol support         | ✅ | ❌ | varies | varies | ✅ |
+| Structure-aware cache (*args len / kwargs keys)  | ✅ | ➖ | varies | varies | ? |
+| Zero dependencies                                | ✅ | ✅ | varies | varies | varies |
+
+> Notes: Third-party libraries differ by version/config; the table reflects typical defaults. WizeDispatcher emphasizes **modern typing**, **predictable precedence**, and **property setter** coverage.
+
+When to use **WizeDispatcher**:
+- You need per-parameter typing (not just first argument).  
+- You want overloads on methods and **properties** with a single, uniform interface.  
+- You care about modern typing features and deterministic, explainable selection.
+
+[Back to top ↑](#table-of-contents)
+
+---
+
+## 11) Use Cases
+
+- **API gateways / routers**: Dispatch by payload shape (TypedDict-like), verb, or header types.  
+- **Numeric kernels**: Specialize by numeric dtypes (`int`, `float`, `complex`) and container forms.  
+- **Plugin points**: Accept a `Protocol` and route to specific implementations.  
+- **Serialization**: Overload on `Mapping[str, Any]` vs `Sequence[T]` vs `bytes`.  
+- **UI / CLI adaptors**: `Callable` signatures route to proper wrappers.  
+- **Domain models**: Property setters that coerce inputs (`str → int`, etc.) via typed overloads.
+
+[Back to top ↑](#table-of-contents)
+
+---
+
+## 12) API Notes & Best Practices
+
+- **Register at import time**. Overloads are inexpensive to register and benefit from a warm cache.  
+- **Prefer keyworded decorator args** for clarity (`@dispatch.func(x=int)` over positional).  
+- **Remember `bool <: int`**. If booleans need a different path, add a `bool` overload; it will outscore `int` for boolean values.  
+- **Varargs/kwargs**: Provide explicit overloads for common shapes (e.g., `(x:int, y:int)`) and let `(x:int, *args)` / `(x:int, **kwargs)` handle the tail.  
+- **Threading**: Dispatch is read-mostly after registration; registration should happen before multi-threaded usage.  
+- **Debugging**: If selection surprises you, check the effective types (decorator vs annotations vs fallback) and whether a value passes the hard type filter.
+
+[Back to top ↑](#table-of-contents)
+
+---
+
+## 13) Installation
 
 ```bash
 pip install wizedispatcher
 ```
 
-## 9. 📚 Documentation
+*Optional dev tooling:* `pytest`, `pytest-benchmark`, `mypy` for type checking.
 
-- **Wiki**: Complete documentation in `/wizedispatcher_wiki`
-- **Examples**: Ready-to-run demos in `/demo`
+---
 
-## 10. 📝 License
+## 14) License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file.
+MIT — see [`LICENSE`](LICENSE).
 
+---
+
+*Questions or ideas?* Open an issue or try it live on Replit (button at the top).
