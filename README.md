@@ -8,7 +8,7 @@
   </a>
 </div>
 
-> Zero dependencies · Python 3.8+ · Works with `typing`/PEP 604 · Structure-aware caching
+> Zero dependencies · Python 3.8+ · Works with `typing`/PEP 604 · Structure-aware caching · Canonical typing normalization
 
 ---
 
@@ -23,18 +23,21 @@
 4. [Dispatch Semantics](#4-dispatch-semantics)  
    - [Compatibility Filtering](#41-compatibility-filtering)  
    - [Specificity Scoring](#42-specificity-scoring)  
-   - [Structure-Aware Caching](#43-structure-aware-caching)  
+    - [Structure-Aware Caching](#43-structure-aware-caching)  
+    - [Globals Injection for Extras](#44-globals-injection-for-extras)  
 5. [Using With Methods](#5-using-with-methods)  
    - [Instance Methods](#51-instance-methods)  
    - [Class & Static Methods](#52-class--static-methods)  
 6. [Property Setter Dispatch](#6-property-setter-dispatch)  
 7. [Varargs & Kwargs Patterns](#7-varargs--kwargs-patterns)  
 8. [Typing Power-Ups](#8-typing-power-ups)  
+   - [Typing normalization & TypingNormalize](#81-typing-normalization--typingnormalize)  
 9. [Performance](#9-performance)  
 10. [Comparisons](#10-comparisons)  
 11. [Use Cases](#11-use-cases)  
 12. [API Notes & Best Practices](#12-api-notes--best-practices)  
-13. [Installation](#13-installation) · [License](#14-license)
+13. [Demos](#13-demos)  
+14. [Installation](#14-installation) · [License](#15-license)
 
 ---
 
@@ -44,7 +47,8 @@
 - **Fast**: One-time selection per call shape; subsequent calls hit a **structure-aware cache**.  
 - **Ergonomic**: Simple decorators, no metaclass tricks, no custom dunder protocols.  
 - **Complete**: Works on free functions, methods, class/static methods, and **property setters**.  
-- **Deterministic**: Hard type checks first, then a transparent specificity score.
+- **Deterministic**: Hard type checks first, then a transparent specificity score.  
+- **Consistent**: Built-in typing normalization canonicalizes hints (including string `Type["int"]` and `ForwardRef`) so selection works uniformly across Python versions.
 
 [Back to top ↑](#table-of-contents)
 
@@ -154,6 +158,9 @@ Selections are cached by a key that reflects both types **and** call shape:
 - `**kwargs` → `(dict, tuple(sorted(kwargs.keys())))`
 
 This prevents cache collisions between e.g. `(x=1)` vs `(x=1,y=2)` or different kwargs sets.
+
+### 4.4 Globals Injection for Extras
+If the fallback signature included `*args` or `**kwargs` but the selected overload does not, WizeDispatcher temporarily injects globals named after the original parameters so bodies that rely on those names continue to work. Undeclared names passed by the call are also injected during the call and then restored.
 
 [Back to top ↑](#table-of-contents)
 
@@ -300,7 +307,7 @@ def _(x: int, **kwargs: Dict[str, Any]) -> str:
 ## 8) Typing Power-Ups
 
 ```python
-from typing import Callable, Literal, Sequence, Mapping, TypedDict, runtime_checkable, Protocol
+from typing import Callable, Literal, Sequence, Mapping, TypedDict, runtime_checkable, Protocol, Type
 
 # Callable with parameter shape
 def act(x: Callable[[int, str], object]) -> str: return "FB"
@@ -319,6 +326,10 @@ def _(x) -> str: return "seq[int]"
 @dispatch.act(x=Mapping[str, int])
 def _(x) -> str: return "map[str,int]"
 
+# Type[...] supports strings and ForwardRef, and actual classes are preserved
+@dispatch.act(x=Type["int"])  # strings resolve to real types
+def _(x) -> str: return "type[int]"
+
 # TypedDict-like
 class User(TypedDict):
     name: str
@@ -336,6 +347,43 @@ class Named(Protocol):
 @dispatch.act(x=Named)
 def _(x) -> str: return f"Named: {x.name}"
 ```
+
+[Back to top ↑](#table-of-contents)
+
+---
+
+### 8.1 Typing normalization & TypingNormalize
+
+WizeDispatcher applies a normalization pass so matching/scoring work on
+canonical `typing.*` shapes, independent of import style or Python version.
+
+- Normalizes `Union`/PEP 604 (`|`) and `Optional[T]`; flattens/orders with
+  `None` first; any union containing `Any` becomes `Any`.
+- Maps PEP 585 builtins/ABCs (`list[int]`, `collections.abc.*`) to
+  `typing.*` counterparts; bare generics gain `Any` (e.g., `List` →
+  `List[Any]`).
+- Preserves callable origins and simplifies parameter specs:
+  `Callable[[...], R]` vs `Callable[..., R]`; `ParamSpec`/`Concatenate`
+  collapse to `Callable[..., R]`.
+- Handles `Type[...]` robustly: resolves `Type["int"]` and
+  `Type[ForwardRef("int")]` to `Type[int]`; preserves actual classes.
+- Passes through and preserves structure for `Annotated`, `Literal`, and
+  `ClassVar`.
+
+You typically do not call it directly, but it is available for tooling:
+
+```python
+from typing import Callable, Concatenate, Type, Union
+from wizedispatcher.typingnormalize import TypingNormalize
+
+# Normalize to canonical forms
+u = TypingNormalize(Union[int, str | None])
+c = TypingNormalize(Callable[Concatenate[int, ...], str])
+t = TypingNormalize(Type["int"])  # → typing.Type[int]
+```
+
+See the dedicated wiki page for a comprehensive reference:
+[TypingNormalize (wiki)](docs/wiki/typingnormalize.md).
 
 [Back to top ↑](#table-of-contents)
 
@@ -445,17 +493,37 @@ When to use **WizeDispatcher**:
 
 ---
 
-## 13) Installation
+## 13) Demos
+
+Explore runnable examples in [`demos/`](demos/):
+
+- [`demos/typing_constructs.py`](demos/typing_constructs.py): coverage of `Annotated`, `Literal`, union flattening, callable shapes.
+- [`demos/methods_and_property.py`](demos/methods_and_property.py): instance/class/static methods and property setter overloads.
+- [`demos/forwardref_and_strings.py`](demos/forwardref_and_strings.py): normalization of `Type["int"]` and forward references.
+- [`demos/containers_and_tuples.py`](demos/containers_and_tuples.py): container/tuple matching examples.
+- [`demos/run_all.py`](demos/run_all.py): execute all demos at once.
+
+Run all demos:
+
+```bash
+python -m demos.run_all
+```
+
+[Back to top ↑](#table-of-contents)
+
+---
+
+## 14) Installation
 
 ```bash
 pip install wizedispatcher
 ```
 
-*Optional dev tooling:* `pytest`, `pytest-benchmark`, `mypy` for type checking.
+*Optional dev tooling:* `pytest`, `ruff`, `pyright`.
 
 ---
 
-## 14) License
+## 15) License
 
 MIT — see [`LICENSE`](LICENSE).
 

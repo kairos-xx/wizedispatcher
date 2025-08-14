@@ -113,6 +113,54 @@ winners; ties are resolved by registration order.
 Understanding these rules helps you predict which overload will
 be selected when argument types overlap.
 
+## Typing normalization (deep dive)
+
+WizeDispatcher applies a normalization pass to annotations so matching and
+scoring operate on canonical `typing.*` shapes. The normalizer behaves like:
+
+- Removes `TypeVar`, `ParamSpec`, and `Concatenate` by converting them to
+  concrete forms where possible (e.g., `Callable[..., R]`, union of
+  constraints, or the bound; unconstrained → `Any`).
+- Flattens `Union`/PEP 604 unions, deduplicates, and places `None` first.
+- Maps PEP 585 builtins & ABCs to `typing.*` counterparts.
+- Adds defaults to bare generics (e.g., `List` → `List[Any]`).
+- Recognizes and preserves callable origins: `Callable[[T...], R]` vs
+  `Callable[..., R]`.
+- Handles `Type[...]` specially:
+  - `Type["int"]` and `Type[ForwardRef("int")]` → `Type[int]`.
+  - `Type[CustomClass]` preserves the actual class object.
+
+Examples:
+
+```python
+from typing import Any, Callable, Concatenate, Optional, Type, Union
+from wizedispatcher.typingnormalize import TypingNormalize
+
+# Unions
+assert repr(TypingNormalize(Union[Union[int, str], Optional[bytes]])) \
+    == "typing.Union[NoneType, int, str, bytes]"
+
+# Bare generics
+assert repr(TypingNormalize(list)) == "typing.List[typing.Any]"
+
+# Callable with ParamSpec / Concatenate
+P = typing.ParamSpec("P")
+assert repr(TypingNormalize(Callable[Concatenate[int, P], str])) \
+    == "typing.Callable[..., str]"
+
+# Type[...] with strings and classes
+class C: ...
+assert repr(TypingNormalize(Type["int"])) == "typing.Type[int]"
+assert repr(TypingNormalize(Type[C])) == "typing.Type[__main__.C]"
+```
+
+Normalization occurs internally; you typically do not need to call
+`TypingNormalize` directly unless you are building tooling around
+WizeDispatcher.
+
+For a full feature overview and API semantics, see the dedicated
+[TypingNormalize](typingnormalize.md) page.
+
 ## Using Decorator Keyword vs Positional Arguments
 
 You can register overloads by specifying types in two ways:

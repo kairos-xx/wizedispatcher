@@ -11,27 +11,27 @@ code and complicated manual dispatch logic.
 This documentation is organized into several sections to help you
 understand, use, and extend WizeDispatcher:
 
-- **Installation** – how to install the library.
-- **Quickstart** – a quick introduction with a working example.
-- **Advanced Usage** – deeper topics such as method dispatch,
+- [Installation](installation.md) – how to install the library.
+- [Quickstart](quickstart.md) – a quick introduction with a working example.
+- [Advanced Usage](advanced.md) – deeper topics such as method dispatch,
   property dispatch, and the TypeMatch scoring algorithm.
-- **API Reference** – detailed descriptions of classes, functions,
-  and methods with parameters and return types.
-- **Demos** – examples of using WizeDispatcher in real code,
+- [Typing normalization](advanced.md#typing-normalization-deep-dive) – how
+  annotations are canonicalized so modern typing constructs behave
+  consistently across Python versions.
+- **TypingNormalize API** – complete reference and examples of the
+  normalization utility used internally. See
+  [TypingNormalize](typingnormalize.md).
+- [API Reference](api_reference.md) – detailed descriptions of classes,
+  functions, and methods with parameters and return types.
+- [Demos](demos.md) – examples of using WizeDispatcher in real code,
   including how to run all demos.
-- **Troubleshooting** – common issues and how to resolve them.
-- **FAQ** – frequently asked questions and answers.
-- **Development** – guidelines for contributing to
+- [Troubleshooting](troubleshooting.md) – common issues and how to resolve
+  them.
+- [FAQ](faq.md) – frequently asked questions and answers.
+- [Development](development.md) – guidelines for contributing to
   WizeDispatcher and how the library works internally.
 
-## New in This Version
-
-- **Partial Type Hints**: Overload functions can specify only some parameter
-  type hints; missing types are taken from the fallback function.
-- **Missing Arguments Filled**: If an overload omits parameters entirely,
-  their types and default values are completed from the fallback.
-- **`*args` / `**kwargs` Handling**: When overloads use var-positional or
-  var-keyword parameters without explicit annotations, these are matched
-  using the fallback’s annotations.
-- **Mixed Overload Strategies**: You can combine positional, keyword, and
-  fallback-derived type hints within a single overload registration.
+For details, examples, and API semantics see the dedicated
+[TypingNormalize](typingnormalize.md) page. See Advanced Usage →
+[Typing normalization](advanced.md#typing-normalization-deep-dive) for a
+deep dive and API Reference for the `TypingNormalize` utility.

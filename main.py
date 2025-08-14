@@ -15,9 +15,22 @@ Requires: `pip install wizedispatcher`
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Union
+from typing import (
+    Any,
+    Annotated,
+    Callable,
+    Concatenate,
+    Literal,
+    Optional,
+    ParamSpec,
+    Type,
+    Union,
+)
 
 from wizedispatcher import dispatch
+from wizedispatcher.typingnormalize import TypingNormalize
+
+P: ParamSpec = ParamSpec("P")
 
 
 # ---------- simple styling ---------- #
@@ -198,23 +211,80 @@ def _adv_c(b: bool) -> str:
     return f"_c - {a}{b and c}"  # type: ignore[name-defined]
 
 
+# ---------- 6) TypingNormalize: highlights ---------- #
+def _show_typingnormalize() -> None:
+    title("6) TypingNormalize Highlights")
+    show(
+        "TN Union flatten",
+        repr(TypingNormalize(Union[Union[int, str], Optional[bytes]])),
+    )
+    show("TN bare list", repr(TypingNormalize(list)))
+    show(
+        "TN Callable Concatenate",
+        repr(TypingNormalize(Callable[Concatenate[int, P], str])),  # type: ignore[reportInvalidTypeForm]
+    )
+    show("TN Type['int']", repr(TypingNormalize(Type["int"])))
+    show(
+        "TN Annotated",
+        repr(TypingNormalize(Annotated[int, "meta"])),
+    )
+    show("TN Literal", repr(TypingNormalize(Literal["a", 2])))
+
+
+# ---------- 7) TypingNormalize in dispatch ---------- #
+def lit(x: object) -> str:
+    return "FB"
+
+
+@dispatch.lit(x=Literal["go", "stop"])  # type: ignore[valid-type]
+def _(x: str) -> str:
+    return f"literal:{x}"
+
+
+def ann(x: object) -> str:
+    return "FB"
+
+
+@dispatch.ann
+def _(x: Annotated[int, "meta"]) -> str:  # type: ignore[valid-type]
+    return f"ann:int:{x}"
+
+
+def ttype(x: type[object]) -> str:
+    return "FB"
+
+
+@dispatch.ttype(x=Type["int"])  # type: ignore[valid-type]
+def _(x: type[int]) -> str:
+    return "type[int]"
+
+
 def main() -> None:
     title("WizeDispatcher— Entry-Level Showcase")
 
     title("1) Free Functions")
     show("concat(2, 3) → int+int", concat(2, 3), 5)
     show("concat('a','b') → str+str", concat("a", "b"), "ab")
-    show("concat(7, True) → positional overload", concat(7, True),
-         "int/bool:7-True")
+    show(
+        "concat(7, True) → positional overload",
+        concat(7, True),
+        "int/bool:7-True",
+    )
 
     title("2) Typing: Optional, Container, Callable, Container-Kind")
     show("describe(None) → Optional[int]", describe(None), "none")
     show("describe([1,2,3]) → list[int]", describe([1, 2, 3]), "list[int]:3")
-    show("describe(times_two) → Callable (broad)", describe(times_two),
-         "callable")
+    show(
+        "describe(times_two) → Callable (broad)",
+        describe(times_two),
+        "callable",
+    )
     show("classify([1,2]) → list[int]", classify([1, 2]), "list[int]")
-    show("classify((1,2,3)) → tuple[int,...]", classify((1, 2, 3)),
-         "tuple[int,...]")
+    show(
+        "classify((1,2,3)) → tuple[int,...]",
+        classify((1, 2, 3)),
+        "tuple[int,...]",
+    )
     show("classify({'a': 1}) → fallback", classify({"a": 1}), "unknown")
 
     title("3) Methods, Class/Static")
@@ -224,8 +294,7 @@ def main() -> None:
     show("Toy.cm(True) → classmethod(bool)", Toy.cm(True), "cm bool:True")
     show("Toy.cm(42) → classmethod(base)", Toy.cm(42), "cm base:42")
     show("Toy.sm('yo') → static(str)", Toy.sm("yo"), "sm str:yo")
-    show("Toy.sm({'x':1}) → static(base)", Toy.sm({"x": 1}),
-         "sm base:{'x': 1}")
+    show("Toy.sm({'x':1}) → static(base)", Toy.sm({"x": 1}), "sm base:{'x': 1}")
 
     title("4) Property Setter Dispatch")
     t.v = 7
@@ -234,19 +303,40 @@ def main() -> None:
     show("t.v = 'hey' → wrapped", t.v, "(hey)")
 
     title("5) Omitted Params + Default Injection")
-    show("concat_adv(1, 2) → _a + fallback c",
-         concat_adv(1, 2), "_a - 3default")
-    show("concat_adv(1, 2, 's') → _a with c='s'",
-         concat_adv(1, 2, "s"), "_a - 3s")
-    show("concat_adv(1, 2.2, 3) → _b (b=float, c=3)",
-         concat_adv(1, 2.2, 3), "_b - 15.2")
-    show("concat_adv('1', True, False) → _c (a=str, c=bool)",
-         concat_adv("1", True, False), "_c - 1False")
-    show("concat_adv('1', True) → fallback (no c:bool)",
-         concat_adv("1", True), "default - 1Truedefault")
+    show("concat_adv(1, 2) → _a + fallback c", concat_adv(1, 2), "_a - 3default")
+    show(
+        "concat_adv(1, 2, 's') → _a with c='s'",
+        concat_adv(1, 2, "s"),
+        "_a - 3s",
+    )
+    show(
+        "concat_adv(1, 2.2, 3) → _b (b=float, c=3)",
+        concat_adv(1, 2.2, 3),
+        "_b - 15.2",
+    )
+    show(
+        "concat_adv('1', True, False) → _c (a=str, c=bool)",
+        concat_adv("1", True, False),
+        "_c - 1False",
+    )
+    show(
+        "concat_adv('1', True) → fallback (no c:bool)",
+        concat_adv("1", True),
+        "default - 1Truedefault",
+    )
 
-    print(f"\n{C.DIM}Done. All green checks mean the overload matched as "
-          f"intended.{C.RESET}\n")
+    _show_typingnormalize()
+
+    title("7) TypingNormalize in Dispatch")
+    show('lit("go") → Literal overload', lit("go"), "literal:go")
+    show("ann(7) → Annotated[int] overload", ann(7), "ann:int:7")
+    show("ann('x') → fallback", ann("x"), "FB")
+    show("ttype(int) → Type['int'] overload", ttype(int), "type[int]")
+
+    print(
+        f"\n{C.DIM}Done. All green checks mean the overload matched as "
+        f"intended.{C.RESET}\n"
+    )
 
 
 if __name__ == "__main__":

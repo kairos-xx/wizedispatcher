@@ -72,8 +72,22 @@ static methods, and property setters. See the
 
 ### Quickstart with Partial Hints
 
-You can define overloads that omit some parameters; WizeDispatcherfills
+You can define overloads that omit some parameters; WizeDispatcher fills
 missing ones from the fallback.
+
+### Typing normalization (at a glance)
+
+Before matching, WizeDispatcher canonicalizes common typing forms:
+
+- PEP 604 unions are flattened and ordered (`None` first when present).
+- Bare generics (e.g., `List`) gain `Any` defaults → `List[Any]`.
+- `Callable[Concatenate[..., P], R]` and `Callable[P, R]` normalize to
+  `Callable[..., R]`.
+- `Type["int"]` resolves to `Type[int]`; actual classes are preserved in
+  `Type[...]` and `Union[...]`.
+
+This keeps overload resolution consistent across Python versions and import
+styles.
 
 ```python
 def concat(a: Any, b: Any, c: str = "default") -> str:

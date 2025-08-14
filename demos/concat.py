@@ -29,10 +29,10 @@ def _c(b: bool) -> str:
 
 
 if __name__ == "__main__":
-    print(concat(1, 2))                # _a - 3default
-    print(concat(1, 2, "s"))           # _a - 3s
-    print(concat(1, 2.2, 3))           # _b - 15.2
-    print(concat("1", True, False))    # _c - 1False
+    print(concat(1, 2))  # _a - 3default
+    print(concat(1, 2, "s"))  # _a - 3s
+    print(concat(1, 2.2, 3))  # _b - 15.2
+    print(concat("1", True, False))  # _c - 1False
 
     # Bonus: show fallback when bool `c` not provided for _c
-    print(concat("1", True))           # default - 1Truedefault
+    print(concat("1", True))  # default - 1Truedefault

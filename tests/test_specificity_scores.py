@@ -14,6 +14,7 @@ from wizedispatcher import TypeMatch
 
 
 def test_specificity_covers_many_branches() -> None:
+    """Exercise many scoring branches with diverse typing hints."""
     v: int = 3
     # Top types
     assert TypeMatch._type_specificity_score(v, Any) == 0
@@ -27,7 +28,8 @@ def test_specificity_covers_many_branches() -> None:
     TypeMatch._type_specificity_score(3, Union[int, str])
     TypeMatch._type_specificity_score(int, Type[int])
 
-    def f(a: int, b: str) -> bool: ...
+    def f(a: int, b: str) -> bool:  # type: ignore[reportUnusedParameter]
+        ...
 
     TypeMatch._type_specificity_score(f, Callable[[int, str], bool])
     # Fallback plain class

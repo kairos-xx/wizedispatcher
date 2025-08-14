@@ -12,16 +12,21 @@ from wizedispatcher import TypeMatch
 
 # TypedDict tests
 class UserTD(TypedDict):
+    """TypedDict with required keys used for matching tests."""
+
     id: int
     name: str
 
 
 class UserPartial(TypedDict, total=False):
+    """TypedDict with optional keys to allow missing values."""
+
     id: int
     name: str
 
 
 def test_typed_dict_matching() -> None:
+    """TypedDict strict vs partial matching behavior."""
     assert TypeMatch._is_match({"id": 1, "name": "a"}, UserTD)
     assert not TypeMatch._is_match({"id": "1", "name": "a"}, UserTD)
     # Partial with optional keys: allow missing
@@ -30,23 +35,27 @@ def test_typed_dict_matching() -> None:
 
 # Protocol tests
 class P(Protocol):
+    """Non-runtime protocol used for matching tests."""
 
     def foo(self) -> int: ...
 
 
 @runtime_checkable
 class PR(Protocol):
+    """Runtime-checkable protocol used for isinstance matching."""
 
     def foo(self) -> int: ...
 
 
 class COK:
+    """Concrete class implementing protocol methods."""
 
     def foo(self) -> int:
         return 1
 
 
 def test_protocol_runtime_checkable() -> None:
+    """Non-runtime protocol fails; runtime protocol matches at runtime."""
     # Non-runtime protocol should return False
     assert TypeMatch._is_match(COK(), P) is False
     # Runtime checkable works with isinstance
@@ -61,20 +70,26 @@ def bad(a: str, b: int) -> bool: ...
 
 
 def test_callable_param_compatibility() -> None:
+    """Callable param compatibility across ok and bad signatures."""
     assert TypeMatch._is_match(ok, Callable[[int, str], bool])
     assert not TypeMatch._is_match(bad, Callable[[int, str], bool])
 
 
 # ClassVar unwrap and Type[T] scoring paths
 class D:
+    """Base class used for Type[T] tests."""
+
     pass
 
 
 class E(D):
+    """Subclass used for Type[T] tests."""
+
     pass
 
 
 def test_classvar_and_type_objects() -> None:
+    """ClassVar unwrap and Type[T] object relationships."""
     assert TypeMatch._is_match(3, ClassVar[int])
     assert TypeMatch._is_match(E, Type[D])
     assert not TypeMatch._is_match(D, Type[E])

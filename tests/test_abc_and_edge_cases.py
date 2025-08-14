@@ -7,6 +7,7 @@ T = TypeVar("T")
 
 
 def test_iterable_and_sequence_and_mapping_abcs() -> None:
+    """ABCs for Iterable/Sequence/Mapping with concrete arguments."""
     assert TypeMatch._is_match([1, 2, 3], Iterable[int])
     assert not TypeMatch._is_match([1, "x"], Iterable[int])
     assert TypeMatch._is_match((1, 2, 3), Sequence[int])
@@ -14,12 +15,13 @@ def test_iterable_and_sequence_and_mapping_abcs() -> None:
 
 
 def test_list_t_matches_scalar_inner_type() -> None:
-    # Special case: list[T] matches scalar T when value isn't list
+    """Special case: list[T] matches scalar T when value isn't a list."""
     assert TypeMatch._is_match(5, list[int])
     assert not TypeMatch._is_match("5", list[int])
 
 
 def test_callable_ellipsis_always_ok_when_callable() -> None:
+    """Callable with ellipsis accepts any callable value."""
 
     def f(x: T) -> T:
         return x
@@ -28,5 +30,5 @@ def test_callable_ellipsis_always_ok_when_callable() -> None:
 
 
 def test_type_origin_with_instance_returns_false() -> None:
-    # If origin is Type[type] and value is an instance (not a class), return False
+    """If origin is Type[T], non-class value should not match."""
     assert not TypeMatch._is_match(3, type[int])

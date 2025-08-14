@@ -5,6 +5,7 @@ from wizedispatcher import TypeMatch
 
 
 def test_typevar_constraints_and_bounds_specificity() -> None:
+    """TypeVar with constraints and bound should be scorable."""
     T = TypeVar("T", int, str)
     U = TypeVar("U", bound=int)
     # Just ensure these execute; relative ordering not crucial here
@@ -13,11 +14,13 @@ def test_typevar_constraints_and_bounds_specificity() -> None:
 
 
 def test_typematch_empty_and_kwargs_value_inference() -> None:
+    """Empty options return []; **kwargs Mapping guides unknown keys."""
     # Case 1: empty options -> returns []
     assert TypeMatch({"x": 1}, []) == []
 
     # Case 2: candidate has **kwargs Mapping[str, int] and match has an unknown key
     def f(a, **kwargs: Mapping[str, int]) -> str:
+        """Accept extras via Mapping[str, int] in **kwargs."""
         _ = (a, kwargs)
         return "ok"
 

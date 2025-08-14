@@ -1,27 +1,31 @@
+"""Illustrate plugin-style overload registration.
+
+Plugins can import a consumer's `dispatch.handle` and register overloads
+without modifying the consumer module, as long as import ordering brings
+the plugins into scope before calls.
+"""
+
 from wizedispatcher import dispatch
 
 
-# Consumer module API
-def handle(event) -> str:
-    _ = event
+def handle(event: object) -> str:
+    """Fallback consumer function when no plugin overload applies."""
     return "default"
 
 
-# Plugin A registers an overload
 @dispatch.handle(event=dict)
-def _(event) -> str:
-    _ = event
+def _(event: dict) -> str:  # type: ignore[type-arg]
+    """Plugin A overload for mapping events."""
     return f"dict:{sorted(event)}"
 
 
-# Plugin B registers another overload
 @dispatch.handle(event=list)
-def _(event) -> str:
-    _ = event
+def _(event: list) -> str:  # type: ignore[type-arg]
+    """Plugin B overload for sequence events."""
     return f"list:{len(event)}"
 
 
 if __name__ == "__main__":
-    print(handle({"a": 1, "b": 2}))  # dict:['a', 'b']
-    print(handle([1, 2, 3]))  # list:3
-    print(handle(object()))  # default
+    print(handle({"a": 1, "b": 2}))
+    print(handle([1, 2, 3]))
+    print(handle(object()))

@@ -42,6 +42,8 @@ If the overload you expect is not selected, check the following:
 
 - Are you annotating or providing the correct types? Decorator
   keyword arguments override annotations.
+- Are string-based or forward-ref types being resolved as expected? WizeDispatcher
+  normalizes `Type["int"]` to `Type[int]` and flattens unions before matching.
 - Are you accidentally passing a subclass? The specificity scoring
   may select a more specific overload for subclasses.
 - Are you mixing positional and keyword constraints correctly?
@@ -66,3 +68,11 @@ strings.
 
 If you see unexpected matches, try annotating the elements
 explicitly or splitting overloads for each case.
+
+## Callable parameters don’t seem to match
+
+If you constrain a parameter as `Callable[[T1, T2], R]`, WizeDispatcher checks
+the callable’s declared positional parameters when they’re visible to
+`inspect.signature`. Unknown or built-in callables are treated as compatible.
+When using `ParamSpec` or `Concatenate`, normalization converts them to
+`Callable[..., R]`, which accepts any parameter shape.
