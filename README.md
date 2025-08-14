@@ -495,13 +495,26 @@ When to use **WizeDispatcher**:
 
 ## 13) Demos
 
-Explore runnable examples in [`demos/`](demos/):
+Explore runnable examples in [`demos/`](demos/). Each script can be run directly. Typical contents:
 
-- [`demos/typing_constructs.py`](demos/typing_constructs.py): coverage of `Annotated`, `Literal`, union flattening, callable shapes.
-- [`demos/methods_and_property.py`](demos/methods_and_property.py): instance/class/static methods and property setter overloads.
-- [`demos/forwardref_and_strings.py`](demos/forwardref_and_strings.py): normalization of `Type["int"]` and forward references.
-- [`demos/containers_and_tuples.py`](demos/containers_and_tuples.py): container/tuple matching examples.
-- [`demos/run_all.py`](demos/run_all.py): execute all demos at once.
+| Demo file | Description |
+|---|---|
+| [`demos/basic_demo.py`](demos/basic_demo.py) | End-to-end showcase with formatted output. |
+| [`demos/basic_overloads.py`](demos/basic_overloads.py) | Minimal examples of free function overloads. |
+| [`demos/callable_signatures.py`](demos/callable_signatures.py) | Callable shape matching and ParamSpec/Concatenate. |
+| [`demos/concat.py`](demos/concat.py) | Partial hints and injected defaults in practice. |
+| [`demos/containers_and_tuples.py`](demos/containers_and_tuples.py) | Dispatch on lists/tuples/mappings with element type checking. |
+| [`demos/forwardref_and_strings.py`](demos/forwardref_and_strings.py) | Normalization of `Type["int"]` and forward references. |
+| [`demos/methods_and_property.py`](demos/methods_and_property.py) | Instance/class/static methods and property setter overloads. |
+| [`demos/micro_perf_cache.py`](demos/micro_perf_cache.py) | Quick look at cold vs hot dispatch paths. |
+| [`demos/plugin_registration.py`](demos/plugin_registration.py) | Simple plugin-style registration via dispatch. |
+| [`demos/property_only_class.py`](demos/property_only_class.py) | Dispatch property setters by assigned value type. |
+| [`demos/run_all.py`](demos/run_all.py) | Helper to execute all demos. |
+| [`demos/shape_bias_and_cache.py`](demos/shape_bias_and_cache.py) | Structure-aware cache and call-shape effects. |
+| [`demos/typed_dict_and_protocol.py`](demos/typed_dict_and_protocol.py) | TypedDict and runtime Protocol dispatching. |
+| [`demos/typing_constructs.py`](demos/typing_constructs.py) | `Annotated`, `Literal`, unions, callable shapes. |
+| [`demos/typingnormalize_basics.py`](demos/typingnormalize_basics.py) | TypingNormalize basics and normalization guarantees. |
+| [`demos/typingnormalize_forwardrefs.py`](demos/typingnormalize_forwardrefs.py) | TypingNormalize with ForwardRef and string types. |
 
 Run all demos:
 
