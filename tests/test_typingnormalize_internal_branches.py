@@ -118,8 +118,9 @@ def test_from_origin_fallback_subscription() -> None:
 
     out: Type = TypingNormalize._from_origin(
         Fake(), (int, str))  # type: ignore[reportIndexIssue]
-    assert out[0] == "ok" and out[1] == (int, str
-                                         )  # type: ignore[reportIndexIssue]
+    assert (out[0]  # type: ignore[reportIndexIssue]
+            == "ok" and out[1]  # type: ignore[reportIndexIssue]
+            == (int, str))
 
 
 def test_from_origin_returns_origin_when_not_subscriptable() -> None:
