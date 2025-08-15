@@ -6,37 +6,36 @@ from collections import Counter as CollCounter
 from collections import OrderedDict as CollOrderedDict
 from collections import defaultdict as CollDefaultDict
 from collections import deque as CollDeque
-from collections.abc import (
-    AsyncIterable as AbcAsyncIterable,
-    AsyncIterator as AbcAsyncIterator,
-    Awaitable as AbcAwaitable,
-    ByteString as AbcByteString,
-    Callable as AbcCallable,
-    Collection as AbcCollection,
-    Container as AbcContainer,
-    Coroutine as AbcCoroutine,
-    Generator as AbcGenerator,
-    Hashable as AbcHashable,
-    Iterable as AbcIterable,
-    Iterator as AbcIterator,
-    ItemsView as AbcItemsView,
-    KeysView as AbcKeysView,
-    Mapping as AbcMapping,
-    MappingView as AbcMappingView,
-    MutableMapping as AbcMutableMapping,
-    MutableSequence as AbcMutableSequence,
-    Reversible as AbcReversible,
-    Sequence as AbcSequence,
-    Set as AbcSet,
-    Sized as AbcSized,
-    ValuesView as AbcValuesView,
-)
+from collections.abc import AsyncIterable as AbcAsyncIterable
+from collections.abc import AsyncIterator as AbcAsyncIterator
+from collections.abc import Awaitable as AbcAwaitable
+from collections.abc import ByteString as AbcByteString
+from collections.abc import Callable as AbcCallable
+from collections.abc import Collection as AbcCollection
+from collections.abc import Container as AbcContainer
+from collections.abc import Coroutine as AbcCoroutine
+from collections.abc import Generator as AbcGenerator
+from collections.abc import Hashable as AbcHashable
+from collections.abc import ItemsView as AbcItemsView
+from collections.abc import Iterable as AbcIterable
+from collections.abc import Iterator as AbcIterator
+from collections.abc import KeysView as AbcKeysView
+from collections.abc import Mapping as AbcMapping
+from collections.abc import MappingView as AbcMappingView
+from collections.abc import MutableMapping as AbcMutableMapping
+from collections.abc import MutableSequence as AbcMutableSequence
+from collections.abc import Reversible as AbcReversible
+from collections.abc import Sequence as AbcSequence
+from collections.abc import Set as AbcSet
+from collections.abc import Sized as AbcSized
+from collections.abc import ValuesView as AbcValuesView
 from contextlib import suppress
 from re import Match as ReMatch
 from re import Pattern as RePattern
 from types import UnionType
 from typing import (
     AbstractSet,
+    Annotated,
     Any,
     AsyncContextManager,
     AsyncIterable,
@@ -44,8 +43,8 @@ from typing import (
     Awaitable,
     ByteString,
     Callable,
-    ClassVar,
     ChainMap,
+    ClassVar,
     Collection,
     Concatenate,
     Container,
@@ -58,13 +57,12 @@ from typing import (
     FrozenSet,
     Generator,
     Hashable,
-    Annotated,
-    Literal,
+    ItemsView,
     Iterable,
     Iterator,
-    ItemsView,
     KeysView,
     List,
+    Literal,
     Mapping,
     MappingView,
     Match,
@@ -101,7 +99,8 @@ class TypingNormalize:
       * Bare typing generics gain Any defaults (e.g., Type[Any]).
       * Callable with ParamSpec/Concatenate → Callable[..., R].
       * String-based Type annotations (e.g., Type["int"]) → Type[int].
-      * Actual class objects in Type[] and Union[] are preserved (e.g., Type[custom_class]).
+      * Actual class objects in Type[] and Union[] are preserved (e.g.,
+        Type[custom_class]).
       * Generic arguments are normalized recursively.
     """
 
@@ -210,9 +209,8 @@ class TypingNormalize:
         Returns:
           True if obj behaves like a TypeVar, else False.
         """
-        return hasattr(obj, "__constraints__") and (
-            obj.__class__.__name__ == "TypeVar"
-        )
+        return hasattr(obj, "__constraints__") and (obj.__class__.__name__
+                                                    == "TypeVar")
 
     @staticmethod
     def _is_paramspec(obj: object) -> bool:
@@ -224,11 +222,8 @@ class TypingNormalize:
         Returns:
           True if obj behaves like a ParamSpec, else False.
         """
-        return (
-            hasattr(obj, "args")
-            and hasattr(obj, "kwargs")
-            and (obj.__class__.__name__ == "ParamSpec")
-        )
+        return (hasattr(obj, "args") and hasattr(obj, "kwargs")
+                and (obj.__class__.__name__ == "ParamSpec"))
 
     @staticmethod
     def _is_union_like(tp: object) -> bool:
@@ -331,9 +326,8 @@ class TypingNormalize:
           A typing.* object where generics and unions are normalized.
         """
         if TypingNormalize._is_typevar(tp):
-            constraints: Tuple[object, ...] = getattr(
-                tp, "__constraints__", ()
-            )
+            constraints: Tuple[object, ...] = getattr(tp, "__constraints__",
+                                                      ())
             if constraints:
                 return TypingNormalize._to_union(*constraints)
             bound: object | None = getattr(tp, "__bound__", None)
@@ -344,8 +338,7 @@ class TypingNormalize:
             return TypingNormalize._to_union(*get_args(tp))
         # Bare typing generics (e.g., List, Dict, Type) → defaults
         defaulted: object | None = TypingNormalize._plain_typing_to_defaults(
-            tp
-        )
+            tp)
         if defaulted is not None:
             return defaulted
         origin: object | None = get_origin(tp)
@@ -355,15 +348,13 @@ class TypingNormalize:
                 return Callable[..., Any]
             params: object = params_ret[0]
             ret: object = TypingNormalize._norm(params_ret[1])
-            return (
-                TypingNormalize._tsub(
-                    "Callable",
-                    ([TypingNormalize._norm(p) for p in params], ret),
-                )
-                if isinstance(params, list)
-                else TypingNormalize._tsub("Callable", (Ellipsis, ret))
-            )
-        # Handle Type annotations - convert strings/ForwardRefs but preserve actual class objects
+            return (TypingNormalize._tsub(
+                "Callable",
+                ([TypingNormalize._norm(p) for p in params], ret),
+            ) if isinstance(params, list) else TypingNormalize._tsub(
+                "Callable", (Ellipsis, ret)))
+        # Handle Type annotations - convert strings/ForwardRefs but preserve
+        # actual class objects
         if origin is type:
             args: Tuple[object, ...] = get_args(tp)
             if len(args) == 1:
@@ -371,23 +362,20 @@ class TypingNormalize:
                 if isinstance(arg, str):
                     # Convert string to actual type if possible
                     normalized_arg = TypingNormalize._string_to_type(arg)
-                    return TypingNormalize._tsub("Type", (normalized_arg,))
+                    return TypingNormalize._tsub("Type", (normalized_arg, ))
                 elif isinstance(arg, ForwardRef):
                     # Convert ForwardRef to actual type if possible
                     normalized_arg = TypingNormalize._resolve_forward_ref(arg)
-                    return TypingNormalize._tsub("Type", (normalized_arg,))
+                    return TypingNormalize._tsub("Type", (normalized_arg, ))
                 else:
                     # Preserve actual class objects (e.g., Type[custom_class])
                     # Just normalize the class object itself if it's a generic
                     normalized_arg = TypingNormalize._norm(arg)
-                    return TypingNormalize._tsub("Type", (normalized_arg,))
-        return (
-            TypingNormalize._plain_runtime_to_typing(tp)
-            if origin is None
-            else TypingNormalize._from_origin(
-                origin, tuple(TypingNormalize._norm(a) for a in get_args(tp))
-            )
-        )
+                    return TypingNormalize._tsub("Type", (normalized_arg, ))
+        return (TypingNormalize._plain_runtime_to_typing(tp)
+                if origin is None else TypingNormalize._from_origin(
+                    origin,
+                    tuple(TypingNormalize._norm(a) for a in get_args(tp))))
 
     @staticmethod
     def _to_union(*parts: object) -> object:
@@ -464,16 +452,16 @@ class TypingNormalize:
 
         name: str | None = TypingNormalize._ORIGIN_TO_TYPING.get(origin)
         if name is None:
-            # Fallback: construct using the origin directly if it supports subscription
+            # Fallback: construct using the origin directly if it supports
+            # subscription
             try:
                 return origin[args]  # type: ignore[index]
             except Exception:
                 return origin
-        return (
-            (TypingNormalize._tsub("Tuple", tuple(args[:-1]) + (Ellipsis,)))
-            if name == "Tuple" and args and args[-1] is Ellipsis
-            else TypingNormalize._tsub(name, args)
-        )
+        return ((TypingNormalize._tsub("Tuple",
+                                       tuple(args[:-1]) + (Ellipsis, )))
+                if name == "Tuple" and args and args[-1] is Ellipsis else
+                TypingNormalize._tsub(name, args))
 
     @staticmethod
     def _plain_runtime_to_typing(tp: object) -> object:
@@ -486,25 +474,22 @@ class TypingNormalize:
           A typing.* type with default Any params, or the input if unknown.
         """
         if tp is list:
-            return TypingNormalize._tsub("List", (Any,))
+            return TypingNormalize._tsub("List", (Any, ))
         if tp is dict:
             return TypingNormalize._tsub("Dict", (Any, Any))
         if tp is set:
-            return TypingNormalize._tsub("Set", (Any,))
+            return TypingNormalize._tsub("Set", (Any, ))
         if tp is frozenset:
-            return TypingNormalize._tsub("FrozenSet", (Any,))
+            return TypingNormalize._tsub("FrozenSet", (Any, ))
         if tp is tuple:
             return TypingNormalize._tsub("Tuple", (Any, Ellipsis))
         if tp is type:
-            return TypingNormalize._tsub("Type", (Any,))
+            return TypingNormalize._tsub("Type", (Any, ))
         if tp is AbcCallable or tp is callable:
             return TypingNormalize._tsub("Callable", (Ellipsis, Any))
         name: str | None = TypingNormalize._ORIGIN_TO_TYPING.get(tp)
-        return (
-            tp
-            if name is None
-            else TypingNormalize._typing_defaults_by_name(name)
-        )
+        return (tp if name is None else
+                TypingNormalize._typing_defaults_by_name(name))
 
     @staticmethod
     def _plain_typing_to_defaults(tp: object) -> object | None:
@@ -518,11 +503,8 @@ class TypingNormalize:
           ``tp`` is not a bare typing generic.
         """
         name: str | None = TypingNormalize._TYPING_MAP.get(tp)
-        return (
-            None
-            if name is None
-            else TypingNormalize._typing_defaults_by_name(name)
-        )
+        return (None if name is None else
+                TypingNormalize._typing_defaults_by_name(name))
 
     @staticmethod
     def _typing_defaults_by_name(name: str) -> object:
@@ -535,45 +517,45 @@ class TypingNormalize:
           A parameterized typing.* type with Any defaults.
         """
         if name == "List":
-            return TypingNormalize._tsub("List", (Any,))
+            return TypingNormalize._tsub("List", (Any, ))
         if name == "Dict":
             return TypingNormalize._tsub("Dict", (Any, Any))
         if name == "Set":
-            return TypingNormalize._tsub("Set", (Any,))
+            return TypingNormalize._tsub("Set", (Any, ))
         if name == "FrozenSet":
-            return TypingNormalize._tsub("FrozenSet", (Any,))
+            return TypingNormalize._tsub("FrozenSet", (Any, ))
         if name == "Tuple":
             return TypingNormalize._tsub("Tuple", (Any, Ellipsis))
         if name == "Type":
-            return TypingNormalize._tsub("Type", (Any,))
+            return TypingNormalize._tsub("Type", (Any, ))
         if name == "Deque":
-            return TypingNormalize._tsub("Deque", (Any,))
+            return TypingNormalize._tsub("Deque", (Any, ))
         if name == "DefaultDict":
             return TypingNormalize._tsub("DefaultDict", (Any, Any))
         if name == "OrderedDict":
             return TypingNormalize._tsub("OrderedDict", (Any, Any))
         if name == "Counter":
-            return TypingNormalize._tsub("Counter", (Any,))
+            return TypingNormalize._tsub("Counter", (Any, ))
         if name == "ChainMap":
             return TypingNormalize._tsub("ChainMap", (Any, Any))
         if name in {"Mapping", "MutableMapping"}:
             return TypingNormalize._tsub(name, (Any, Any))
         if name in {
-            "Iterable",
-            "Iterator",
-            "AsyncIterable",
-            "AsyncIterator",
-            "Sequence",
-            "MutableSequence",
-            "Collection",
-            "AbstractSet",
-            "Reversible",
-            "ContextManager",
-            "AsyncContextManager",
-            "Pattern",
-            "Match",
+                "Iterable",
+                "Iterator",
+                "AsyncIterable",
+                "AsyncIterator",
+                "Sequence",
+                "MutableSequence",
+                "Collection",
+                "AbstractSet",
+                "Reversible",
+                "ContextManager",
+                "AsyncContextManager",
+                "Pattern",
+                "Match",
         }:
-            return TypingNormalize._tsub(name, (Any,))
+            return TypingNormalize._tsub(name, (Any, ))
         if name in {"Coroutine", "Generator"}:
             return TypingNormalize._tsub(name, (Any, Any, Any))
         if name in {"MappingView", "KeysView", "ItemsView", "ValuesView"}:
@@ -611,9 +593,9 @@ class TypingNormalize:
             params: object = args[0]
             ret: object = args[1]
             if params is Ellipsis:
-                return getattr(typing, "Callable")[..., ret]
+                return getattr(typing, typing_name)[..., ret]
             if isinstance(params, list):
-                return getattr(typing, "Callable")[params, ret]
+                return getattr(typing, typing_name)[params, ret]
             raise ValueError("Callable params must be list or Ellipsis.")
         if not isinstance(args, tuple):
             raise ValueError("Generic expects a tuple of arguments.")
@@ -621,15 +603,14 @@ class TypingNormalize:
             return getattr(typing, typing_name)[args]
         except Exception as exc:
             raise ValueError(
-                f"Unknown typing target: {typing_name!r}"
-            ) from exc
+                f"Unknown typing target: {typing_name!r}") from exc
 
 
 if __name__ == "__main__":
 
-    def show(
-        title: str, input_tp: object, expected: str | None = None
-    ) -> None:
+    def show(title: str,
+             input_tp: object,
+             expected: str | None = None) -> None:
         out_str: str = repr(TypingNormalize(input_tp))
         exp_str: str = out_str if expected is None else expected
         print(f"{title:61s} in : {input_tp!r}")
@@ -655,14 +636,15 @@ if __name__ == "__main__":
     )
     show(
         "Callable[Concatenate[..., P], R] -> Callable[..., R]",
-        Callable[Concatenate[int, P], str],  # type: ignore[reportGeneralTypeIssues]
+        Callable[
+            Concatenate[int, P],  # type: ignore[reportGeneralTypeIssues] str
+        ],
         "typing.Callable[..., str]",
     )
 
     # ---------------------- Optional / '|' unions ----------------
-    show(
-        "Optional[T] stays Optional[T]", Optional[int], "typing.Optional[int]"
-    )
+    show("Optional[T] stays Optional[T]", Optional[int],
+         "typing.Optional[int]")
     show(
         "PEP 604 unions flattened; None first",
         int | str | None,
@@ -689,9 +671,8 @@ if __name__ == "__main__":
         dict[str, bytes],
         "typing.Dict[str, bytes]",
     )
-    show(
-        "PEP 585 set[...] -> typing.Set[...]", set[bytes], "typing.Set[bytes]"
-    )
+    show("PEP 585 set[...] -> typing.Set[...]", set[bytes],
+         "typing.Set[bytes]")
     show(
         "PEP 585 frozenset[...] -> typing.FrozenSet[...]",
         frozenset[int],
@@ -833,9 +814,8 @@ if __name__ == "__main__":
     )
 
     # ---------------------- Bare typing generics -----------------
-    show(
-        "Bare typing.List -> typing.List[Any]", List, "typing.List[typing.Any]"
-    )
+    show("Bare typing.List -> typing.List[Any]", List,
+         "typing.List[typing.Any]")
     show(
         "Bare typing.Dict -> typing.Dict[Any, Any]",
         Dict,
@@ -852,9 +832,8 @@ if __name__ == "__main__":
         Tuple,
         "typing.Tuple[typing.Any, ...]",
     )
-    show(
-        "Bare typing.Type -> typing.Type[Any]", Type, "typing.Type[typing.Any]"
-    )
+    show("Bare typing.Type -> typing.Type[Any]", Type,
+         "typing.Type[typing.Any]")
     show(
         "Bare typing.Deque -> typing.Deque[Any]",
         Deque,
@@ -936,9 +915,8 @@ if __name__ == "__main__":
         Container,
         "typing.Container",
     )
-    show(
-        "Bare typing.Hashable -> typing.Hashable", Hashable, "typing.Hashable"
-    )
+    show("Bare typing.Hashable -> typing.Hashable", Hashable,
+         "typing.Hashable")
     show(
         "Bare typing.Awaitable -> typing.Awaitable",
         Awaitable,
@@ -990,7 +968,8 @@ if __name__ == "__main__":
     show(
         "Nested generics + unions normalize (Dict[...] example)",
         dict[str | None, list[Optional[int | bytes]]],
-        "typing.Dict[typing.Optional[str], typing.List[typing.Union[NoneType, int, bytes]]]",
+        ("typing.Dict[typing.Optional[str],"
+         "typing.List[typing.Union[NoneType, int, bytes]]]"),
     )
     show(
         "Nested generics normalize (List[Dict[...]] example)",
@@ -1002,7 +981,8 @@ if __name__ == "__main__":
     show(
         "Callable with nested generics normalizes recursively",
         Callable[[list[int | str], Optional[bytes]], Optional[str]],
-        "typing.Callable[[typing.List[typing.Union[int, str]], typing.Optional[bytes]], typing.Optional[str]]",
+        ("typing.Callable[[typing.List[typing.Union[int, str]], "
+         "typing.Optional[bytes]], typing.Optional[str]]"),
     )
 
     # ---------------------- String-based Type annotations --------

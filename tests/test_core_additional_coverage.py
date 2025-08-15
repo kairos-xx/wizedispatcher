@@ -7,7 +7,7 @@ from sys import modules
 from types import ModuleType
 from typing import Any, Dict, Mapping, ParamSpec, Tuple, cast
 
-from wizedispatcher import WILDCARD, TypeMatch, WizeDispatcher, dispatch
+from wizedispatcher import TypeMatch, WizeDispatcher, dispatch
 
 # Declare globals referenced in adapter test to satisfy type checkers
 existing: Any = None
@@ -98,7 +98,7 @@ def test_callable_origin_variants_and_opaque_signature() -> None:
         def __signature__(self) -> Signature:  # type: ignore[override]
             raise RuntimeError("boom")
 
-        def __call__(self, *a, **k) -> None:
+        def __call__(self, *a, **k) -> None:  # type: ignore[no-untyped-def]
             """Dummy call implementation."""
             return None
 
@@ -189,13 +189,18 @@ def test_specificity_protocol_and_paramspec() -> None:
     """Cover protocol runtime vs non-runtime and ParamSpec scoring."""
 
     class P(t.Protocol):
-        def foo(self) -> int: ...
+
+        def foo(self) -> int:
+            ...
 
     @t.runtime_checkable
     class PR(t.Protocol):
-        def foo(self) -> int: ...
+
+        def foo(self) -> int:
+            ...
 
     class C:
+
         def foo(self) -> int:
             return 1
 
@@ -210,50 +215,59 @@ def test_specificity_protocol_and_paramspec() -> None:
     TypeMatch._type_specificity_score(lambda: None, PSpec)
 
 
-# --- TypeMatch.__new__: scoring, kwargs value type, tmap-based hints, variadic penalties ---
+# --- TypeMatch.__new__: scoring, kwargs value type, tmap-based hints,
+# variadic penalties ---
 def test_typematch_selection_and_scoring_variants() -> None:
     """Exercise selection, scoring, and penalties across candidates."""
 
-    # Function that uses **kwargs with Mapping[str, int] to accept extra named keys
-    def opt(a: int, **kw: Mapping[str, int]) -> str:
+    # Function that uses **kwargs with Mapping[str, int] to accept extra
+    # named keys
+    def opt(
+            a: int,  # type: ignore[reportUnusedParameter]
+            **kw: Mapping[str, int]) -> str:
         """Return marker string after consuming kwargs mapping."""
         _ = kw
         return "opt"
 
     # Function with *args to trigger var-positional penalty
-    def varpos(a: int, *args: Any) -> str:
+    def varpos(
+            a: int,  # type: ignore[reportUnusedParameter]
+            *args: Any) -> str:
         """Return marker after consuming varargs to exercise penalty."""
         _ = args
         return "varpos"
 
     # Function with __dispatch_type_map__ to exercise tmap resolution
-    def tmap_fn(x) -> str:
+    def tmap_fn(x) -> str:  # type: ignore[no-untyped-def]
         """Return marker for tmap-based hint resolution."""
         return "tmap"
 
-    setattr(tmap_fn, "__dispatch_type_map__", {"x": int})
+    setattr(tmap_fn, "__dispatch_type_map__",
+            {"x": int})  # type: ignore[attr-defined]
 
     # Function with explicit annotation
-    def anno(x: int) -> str:
+    def anno(x: int) -> str:  # type: ignore[reportUnusedParameter]
         """Return marker for explicitly annotated candidate."""
         return "anno"
 
-    # Mix candidates; provide a key not declared in some to get missing-keys penalty
+    # Mix candidates; provide a key not declared in some to get
+    # missing-keys penalty
     assert TypeMatch({"x": 1}, [opt, varpos, tmap_fn, anno])
 
 
 def test_typematch_scoring_sums_across_multiple_keys() -> None:
     """Scoring should sum across keys and skip mismatching candidate."""
 
-    def f(a: int, b: str) -> str:
+    def f(a: int, b: str) -> str:  # type: ignore[reportUnusedParameter]
         """Return ok marker for matching signature."""
         return "ok"
 
-    def g_bad(a: int, b: int) -> str:
+    def g_bad(a: int, b: int) -> str:  # type: ignore[reportUnusedParameter]
         """Return bad marker for mismatching signature."""
         return "bad"
 
-    # Multiple keys to force summation across both and a mismatching candidate triggering continue
+    # Multiple keys to force summation across both and a mismatching
+    # candidate triggering continue
     _ = TypeMatch({"a": 1, "b": "x"}, [f, g_bad])
 
 
@@ -261,7 +275,9 @@ def test_wildcard_for_varargs_and_varkw_paths() -> None:
     """Cover wildcard paths for varargs/varkw and param order tweaks."""
 
     class X:
-        def base(self, a, *rest, **named) -> str:  # type: ignore[no-untyped-def]
+
+        def base(self, a, *rest,
+                 **named) -> str:  # type: ignore[no-untyped-def]
             """Return base marker showing extras lengths."""
             return f"base:{a}:{len(rest)}:{len(named)}"
 
@@ -271,10 +287,12 @@ def test_wildcard_for_varargs_and_varkw_paths() -> None:
             return f"a:{a}"
 
     x: X = X()
-    # No extra args/kwargs: keys include varargs/varkw; WILDCARDs added and skipped in type check
+    # No extra args/kwargs: keys include varargs/varkw; WILDCARDs added and
+    # skipped in type check
     # Force a missing key by tampering with param order
     reg = getattr(X, "__dispatch_registry__")["base"]  # type: ignore[index]
-    reg._param_order = tuple(list(reg._param_order) + ["ghost"])  # type: ignore[attr-defined]
+    reg._param_order = tuple(list(reg._param_order) +
+                             ["ghost"])  # type: ignore[attr-defined]
     assert isinstance(x.base(1), str)
 
 
@@ -282,6 +300,7 @@ def test_kwargs_value_type_hint_for_unknown_name() -> None:
     """Use **kwargs type when unknown names are encountered."""
 
     class Y:
+
         def base(self, a, **named) -> str:  # type: ignore[no-untyped-def]
             """Return base marker with sorted named keys."""
             return f"base:{a}:{sorted(named.keys())}"
@@ -289,7 +308,8 @@ def test_kwargs_value_type_hint_for_unknown_name() -> None:
         @dispatch.base
         def _(self, **named: Mapping[str, int]) -> str:
             """Sum values in Mapping[str, int] provided via **kwargs."""
-            # Only **kwargs declared; unknown 'a' should use kwargs value type (int)
+            # Only **kwargs declared; unknown 'a' should use kwargs value
+            # type (int)
             total: int = 0
             for v in named.values():
                 # v is Mapping[str, int] due to **kwargs type; sum its values
@@ -297,7 +317,8 @@ def test_kwargs_value_type_hint_for_unknown_name() -> None:
             return f"kw:{total}"
 
     y: Y = Y()
-    # 'a' is bound to original fixed param, not **kwargs; overload sees no kwargs -> total 0
+    # 'a' is bound to original fixed param, not **kwargs; overload sees
+    # no kwargs -> total 0
     assert y.base(a=5) == "kw:0"
 
 
@@ -305,6 +326,7 @@ def test_type_mismatch_skips_candidate() -> None:
     """Incompatible typed candidate should be skipped during selection."""
 
     class Z:
+
         def base(self, a) -> str:  # type: ignore[no-untyped-def]
             """Return base marker with value."""
             return f"base:{a}"
@@ -335,11 +357,9 @@ def test_make_adapter_injects_and_restores_globals() -> None:
     gns["existing"] = "old"
 
     adapter, _defaults = WizeDispatcher._BaseRegistry._make_adapter(
-        uses_globals
-    )
-    assert (
-        _defaults.get("a", object()) is object() or True
-    )  # defaults mapping exists
+        uses_globals)
+    assert (_defaults.get("a", object()) is object()
+            or True)  # defaults mapping exists
 
     # Call adapter with extra names; it should inject into globals temporarily
     res: Tuple[int, str, int] = adapter(a=0, existing="newer", tempname=123)
@@ -378,12 +398,12 @@ def test_dispatch_cache_key_structure_for_varargs_and_varkw() -> None:
         """Overload forwarding structured call shape."""
         return (a, args, kwargs)
 
-    # Two calls with different *args lengths and different kwargs keys exercise cache-key structure
+    # Two calls with different *args lengths and different kwargs keys
+    # exercise cache-key structure
     r1: Any = target(1, 2, 3, x=1)
     r2: Any = target(1, 2, 3, 4, y=2)
     assert r1[1] != r2[1] or tuple(sorted(r1[2].keys())) != tuple(
-        sorted(r2[2].keys())
-    )
+        sorted(r2[2].keys()))
 
 
 # --- Candidate parameter sourcing in _dispatch ---
@@ -391,7 +411,9 @@ def test_dispatch_candidate_param_sourcing_and_scoring_mix() -> None:
     """Mix bound args, extras, defaults, and **kwargs score paths."""
 
     class C:
-        def base(self, a, *args, **kwargs) -> str:  # type: ignore[no-untyped-def]
+
+        def base(self, a, *args,
+                 **kwargs) -> str:  # type: ignore[no-untyped-def]
             """Return base marker showing extras lengths."""
             return f"base:{a}:{len(args)}:{len(kwargs)}"
 
@@ -449,7 +471,8 @@ def test_dispatch_candidate_param_sourcing_and_scoring_mix() -> None:
     # pos_extras_sim provides b or x depending on scoring/tie-breaks
     assert c.base(0, 7) in ("b:7", "x:7", "cdef", "base:0:1:0")
 
-    # extras present and candidate without varargs should be skipped; still callable overall
+    # extras present and candidate without varargs should be skipped;
+    # still callable overall
     assert isinstance(c.base(0, 1, 2), str)
 
     # leftover keys and candidate without varkw skipped; still callable overall
@@ -463,6 +486,7 @@ def test_dispatch_rejects_type_incompatible_candidate() -> None:
     """Providing incompatible type should skip that candidate."""
 
     class D:
+
         def base(self, a) -> str:  # type: ignore[no-untyped-def]
             """Return base marker with value."""
             return f"base:{a}"
@@ -481,6 +505,7 @@ def test_declared_concrete_false_branch() -> None:
     """Undeclared annotations are not considered concrete declarations."""
 
     class E:
+
         def base(self, u) -> str:  # type: ignore[no-untyped-def]
             """Return base marker with value."""
             return f"base:{u}"
@@ -501,7 +526,8 @@ def module_base_f(a, *rest, **named):  # type: ignore[no-untyped-def]
     return f"base:{a}:{len(rest)}:{len(named)}"
 
 
-# Register an overload for the module-level function above that does NOT declare varargs/varkw
+# Register an overload for the module-level function above that does NOT
+# declare varargs/varkw
 @dispatch.module_base_f
 def _(a: int, b: int, /, c: int, *, d: int) -> str:
     """Overload referencing original names injected as globals."""
@@ -509,31 +535,32 @@ def _(a: int, b: int, /, c: int, *, d: int) -> str:
     return f"ov:{a}:{b}:{c}:{d}:{len(rest)}:{sorted(named.keys())}"  # type: ignore[name-defined]
 
 
-def test_invoke_selected_argument_assembly_and_injection_of_original_names() -> (
-    None
-):
+def test_invoke_selected_argument_assembly_and_injection_of_original_names(
+) -> (None):
     """Assembly of args/kwargs and injection of original names in globals."""
-    # Predefine a name that will also be injected so backup had=True path is taken
+    # Predefine a name that will also be injected so backup had=True path
+    # is taken
     module_base_f.__globals__["named"] = {"pre": 0}
 
     # Call with extras so that injection and assembly execute multiple branches
     out: str = module_base_f(10, 20, c=40, d=50)
     # Overload should execute and include counts/keys from injected originals
     assert out.startswith("ov:10:20:40:50:")
-    # Ensure globals restored correctly for both had=True and had=False injections
+    # Ensure globals restored correctly for both had=True and
+    # had=False injections
     assert "rest" not in module_base_f.__globals__
     assert module_base_f.__globals__["named"] == {"pre": 0}
 
 
 def test_invoke_selected_injection_backup_restore_globals() -> None:
     """Backup existing global and restore after invocation path."""
-    # Ensure that when 'named' exists in globals, backup had=True and restore path triggers
+    # Ensure that when 'named' exists in globals, backup had=True and restore
+    # path triggers
     module_base_f.__globals__["named"] = {"pre": 1}
     mod: ModuleType = modules[__name__]
     reg: Any = mod.__fdispatch_registry__["module_base_f"]
-    chosen: Any = next(
-        ov._func for ov in reg._overloads if not ov._is_original
-    )
+    chosen: Any = next(ov._func for ov in reg._overloads
+                       if not ov._is_original)
     bound, _ = reg._bind(instance=None, args=(1, 2), kwargs={"c": 3, "d": 4})
     out: str = reg._invoke_selected(chosen=chosen, bound=bound)
     assert out.startswith("ov:1:2:3:4:")
@@ -557,10 +584,12 @@ def test_kwonly_argument_assembly() -> None:
     out: str = kwo_base(1, d=5)
     assert out == "ov:1:5"
     # Include an extra kw to exercise injection of leftover kw_extras
-    # Can't pass unexpected kw directly due to binding; exercise via invoke_selected below
+    # Can't pass unexpected kw directly due to binding; exercise via
+    # invoke_selected below
 
 
-# Helpers for invoking _invoke_selected and exercising leftover kw_extras injection
+# Helpers for invoking _invoke_selected and exercising leftover
+# kw_extras injection
 def module_extra_base(a, *rest, **named):  # type: ignore[no-untyped-def]
     """Fallback capturing extras and named keys for leftover injection."""
     return f"base:{a}:{len(rest)}:{sorted(named.keys())}"
@@ -578,25 +607,26 @@ def test_invoke_selected_injects_leftover_kwextras() -> None:
     # Access registry for module_extra_base and locate the overload function
     mod: ModuleType = modules[__name__]
     reg: Any = mod.__fdispatch_registry__["module_extra_base"]
-    chosen: Any = next(
-        ov._func for ov in reg._overloads if not ov._is_original
-    )
+    chosen: Any = next(ov._func for ov in reg._overloads
+                       if not ov._is_original)
     # Bind with extra kw 'z' which is not a parameter in the overload
-    bound, _ = reg._bind(
-        instance=None, args=(10, 20), kwargs={"c": 40, "d": 50, "z": 9}
-    )
+    bound, _ = reg._bind(instance=None,
+                         args=(10, 20),
+                         kwargs={
+                             "c": 40,
+                             "d": 50,
+                             "z": 9
+                         })
     out: str = reg._invoke_selected(chosen=chosen, bound=bound)
     assert out == "ov:10:20:40:50:9"
 
 
-def test_overload_descriptor_set_name_skips_mismatched_owner_and_get_returns_self() -> (
-    None
-):
+def test_overload_descriptor_set_name_skips_mismatched_owner_and_get_self(
+) -> (None):
     """Descriptor should skip mismatched owner and return itself from get."""
     # Manually craft descriptor queues to force the "continue" path
     desc: WizeDispatcher._OverloadDescriptor = (
-        WizeDispatcher._OverloadDescriptor()
-    )
+        WizeDispatcher._OverloadDescriptor())
 
     def fake_fn(a, b):  # type: ignore[no-untyped-def]
         """Dummy function used only to populate the queue."""

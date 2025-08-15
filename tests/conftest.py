@@ -9,7 +9,8 @@ if str(SRC_PATH) not in path:
     # Prepend to path so it takes precedence
     path.insert(0, str(SRC_PATH))
 
-# If an installed package was already imported, remove it so pytest imports local
+# If an installed package was already imported, remove it so pytest
+# imports local
 if "wizedispatcher" in modules:
     mod: ModuleType = modules["wizedispatcher"]
     mod_file: str = getattr(mod, "__file__", "")

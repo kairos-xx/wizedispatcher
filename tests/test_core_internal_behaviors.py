@@ -1,4 +1,5 @@
-# Behavior-oriented tests for internal core behaviors without referencing line numbers
+# Behavior-oriented tests for internal core behaviors without referencing
+# line numbers
 from typing import Any, Callable, Dict, List
 
 from wizedispatcher import WizeDispatcher
@@ -14,17 +15,19 @@ def test_scoring_handles_unannotated_parameters_gracefully() -> None:
     """Scoring must handle unannotated parameters without errors."""
 
     # Create a function with one annotated and one unannotated parameter
-    def func(annotated: int, unannotated):
+    def func(annotated: int, unannotated):  # type: ignore[no-untyped-def]
         return annotated
 
     # Competing overload specifying both annotations
-    def func_overload(annotated: int, unannotated: str):
+    def func_overload(annotated: int,
+                      unannotated: str):  # type: ignore[no-untyped-def]
         return annotated
 
     # Use TypeMatch to exercise scoring and hint resolution without wiring
-    winners: List[Callable] = TypeMatch(
-        {"annotated": 10, "unannotated": "x"}, [func, func_overload]
-    )
+    winners: List[Callable] = TypeMatch({
+        "annotated": 10,
+        "unannotated": "x"
+    }, [func, func_overload])
     assert winners
 
 
@@ -40,8 +43,7 @@ def test_adapter_global_backup_and_restore() -> None:
 
     try:
         adapter, _ = WizeDispatcher._BaseRegistry._make_adapter(
-            func_with_global
-        )
+            func_with_global)
         result: Any = adapter(a=1, gname="injected")
         assert result == (1, "injected")
         # Ensure restored
@@ -59,11 +61,11 @@ def test_invoke_selected_calls_wrapped_when_no_wrapper_present() -> None:
 
     # Create a minimal _BaseRegistry via _FunctionRegistry
     reg: WizeDispatcher._FunctionRegistry = WizeDispatcher._FunctionRegistry(
-        target_name="tmp", original=base
-    )
+        target_name="tmp", original=base)
     # Bind once to produce BoundArguments
-    bound, _ = reg._bind(instance=None, args=(1,), kwargs={})
-    # Since 'chosen' is a plain function (no __wrapped__), the fast path should be used
+    bound, _ = reg._bind(instance=None, args=(1, ), kwargs={})
+    # Since 'chosen' is a plain function (no __wrapped__), the fast path
+    # should be used
     assert reg._invoke_selected(chosen=base, bound=bound) == 2
 
 

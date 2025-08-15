@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from pytest import mark
+
 from wizedispatcher import dispatch
 
 

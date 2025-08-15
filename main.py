@@ -16,8 +16,8 @@ Requires: `pip install wizedispatcher`
 from __future__ import annotations
 
 from typing import (
-    Any,
     Annotated,
+    Any,
     Callable,
     Concatenate,
     Literal,
@@ -56,7 +56,8 @@ def title(text: str) -> None:
 def show(label: str, got: object, expected: object | None = None) -> None:
     ok: bool = expected is None or got == expected
     mark: str = f"{C.G}✓{C.RESET}" if ok else f"{C.R}✗{C.RESET}"
-    exp: str = "" if expected is None else f"{C.DIM} (expected {expected}){C.RESET}"
+    exp: str = ("" if expected is None else
+                f"{C.DIM} (expected {expected}){C.RESET}")
     print(f" {mark} {C.BOLD}{label}{C.RESET}: {got}{exp}")
 
 
@@ -221,7 +222,10 @@ def _show_typingnormalize() -> None:
     show("TN bare list", repr(TypingNormalize(list)))
     show(
         "TN Callable Concatenate",
-        repr(TypingNormalize(Callable[Concatenate[int, P], str])),  # type: ignore[reportInvalidTypeForm]
+        repr(
+            TypingNormalize(Callable[
+                Concatenate[int, P],  # type: ignore[reportInvalidTypeForm]
+                str])),
     )
     show("TN Type['int']", repr(TypingNormalize(Type["int"])))
     show(
@@ -232,16 +236,16 @@ def _show_typingnormalize() -> None:
 
 
 # ---------- 7) TypingNormalize in dispatch ---------- #
-def lit(x: object) -> str:
+def lit(x: object) -> str:  # type: ignore[unused-ignore]
     return "FB"
 
 
-@dispatch.lit(x=Literal["go", "stop"])  # type: ignore[valid-type]
+@dispatch.lit(x=Literal["go", "stop"])
 def _(x: str) -> str:
     return f"literal:{x}"
 
 
-def ann(x: object) -> str:
+def ann(x: object) -> str:  # type: ignore[unused-ignore]
     return "FB"
 
 
@@ -250,12 +254,12 @@ def _(x: Annotated[int, "meta"]) -> str:  # type: ignore[valid-type]
     return f"ann:int:{x}"
 
 
-def ttype(x: type[object]) -> str:
+def ttype(x: type[object]) -> str:  # type: ignore[unused-ignore]
     return "FB"
 
 
-@dispatch.ttype(x=Type["int"])  # type: ignore[valid-type]
-def _(x: type[int]) -> str:
+@dispatch.ttype(x=Type["int"])
+def _(x: type[int]) -> str:  # type: ignore[valid-type]
     return "type[int]"
 
 
@@ -294,7 +298,8 @@ def main() -> None:
     show("Toy.cm(True) → classmethod(bool)", Toy.cm(True), "cm bool:True")
     show("Toy.cm(42) → classmethod(base)", Toy.cm(42), "cm base:42")
     show("Toy.sm('yo') → static(str)", Toy.sm("yo"), "sm str:yo")
-    show("Toy.sm({'x':1}) → static(base)", Toy.sm({"x": 1}), "sm base:{'x': 1}")
+    show("Toy.sm({'x':1}) → static(base)", Toy.sm({"x": 1}),
+         "sm base:{'x': 1}")
 
     title("4) Property Setter Dispatch")
     t.v = 7
@@ -303,7 +308,8 @@ def main() -> None:
     show("t.v = 'hey' → wrapped", t.v, "(hey)")
 
     title("5) Omitted Params + Default Injection")
-    show("concat_adv(1, 2) → _a + fallback c", concat_adv(1, 2), "_a - 3default")
+    show("concat_adv(1, 2) → _a + fallback c", concat_adv(1, 2),
+         "_a - 3default")
     show(
         "concat_adv(1, 2, 's') → _a with c='s'",
         concat_adv(1, 2, "s"),
@@ -333,10 +339,8 @@ def main() -> None:
     show("ann('x') → fallback", ann("x"), "FB")
     show("ttype(int) → Type['int'] overload", ttype(int), "type[int]")
 
-    print(
-        f"\n{C.DIM}Done. All green checks mean the overload matched as "
-        f"intended.{C.RESET}\n"
-    )
+    print(f"\n{C.DIM}Done. All green checks mean the overload matched as "
+          f"intended.{C.RESET}\n")
 
 
 if __name__ == "__main__":

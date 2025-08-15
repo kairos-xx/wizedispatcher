@@ -29,15 +29,15 @@ def test_method_registry_helpers_accessible() -> None:
     z: Z = Z()
     res: str = z.m(1, "x")
     assert res == "base:1:x"
-    # Introspect the method registry to exercise _bind/_provided_keys/_arg_types
+    # Introspect the method registry to exercise
+    # _bind/_provided_keys/_arg_types
     attr_name: str = "__dispatch_registry__"
     reg: Any = getattr(Z, attr_name)["m"]
     bound: BoundArguments
     bound, _ = reg._bind(z, args=(2, "y"), kwargs={})
     # _provided_keys may be missing in packaged build; rely on bound args
     assert tuple(bound.arguments.keys())[:2] == ("self", "a") or tuple(
-        bound.arguments.keys()
-    )[:2] == ("self", "a")
+        bound.arguments.keys())[:2] == ("self", "a")
     arg_types: Any = reg._arg_types(bound)
     assert arg_types[0] is int and arg_types[1] is str
 
@@ -45,7 +45,8 @@ def test_method_registry_helpers_accessible() -> None:
 def test_register_function_overload_missing_target_raises() -> None:
     """Registering overload for missing target should raise error."""
 
-    # Use WizeDispatcher._register_function_overload directly with a bogus target
+    # Use WizeDispatcher._register_function_overload directly with a
+    # bogus target
     def some_impl(x) -> str:
         _ = x
         return "x"
@@ -60,4 +61,4 @@ def test_register_function_overload_missing_target_raises() -> None:
     except AttributeError:
         pass
     else:
-        assert False, "Expected AttributeError for missing function target"
+        AssertionError("Expected AttributeError for missing function target")

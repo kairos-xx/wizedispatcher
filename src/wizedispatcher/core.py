@@ -93,8 +93,7 @@ class TypeMatch:
                 return TypingNormalize(eval(hint, module_dict, module_dict))
             if isinstance(hint, ForwardRef):
                 return TypingNormalize(
-                    eval(hint.__forward_arg__, module_dict, module_dict)
-                )
+                    eval(hint.__forward_arg__, module_dict, module_dict))
         # Fall back to returning a normalized form when possible
         with suppress(Exception):
             return TypingNormalize(hint)
@@ -138,7 +137,8 @@ class TypeMatch:
         Returns:
             True when the origin represents a union type.
         """
-        return origin is Union or (UnionType is not None and origin is UnionType)
+        return origin is Union or (UnionType is not None
+                                   and origin is UnionType)
 
     @classmethod
     def _kwargs_value_type_from_varkw(cls, annotation: object) -> object:
@@ -178,32 +178,25 @@ class TypeMatch:
         supertype: Optional[object] = getattr(hint, "__supertype__", None)
         if callable(hint) and supertype is not None:
             return cls._is_match(value, supertype)
-        if (
-            isinstance(hint, type)
-            and issubclass(hint, dict)
-            and hasattr(hint, "__annotations__")
-            and hasattr(hint, "__total__")
-        ):
+        if (isinstance(hint, type) and issubclass(hint, dict)
+                and hasattr(hint, "__annotations__")
+                and hasattr(hint, "__total__")):
             if not isinstance(value, dict):
                 return False
             ann: Dict[str, object] = hint.__annotations__
             for k in getattr(hint, "__required_keys__", set()):
                 if k not in value or not cls._is_match(value[k], ann[k]):
                     return False
-            return all(
-                not (k in value and not cls._is_match(value[k], ann[k]))
-                for k in getattr(hint, "__optional_keys__", set())
-            )
+            return all(not (k in value and not cls._is_match(value[k], ann[k]))
+                       for k in getattr(hint, "__optional_keys__", set()))
         if isinstance(hint, type) and getattr(hint, "_is_protocol", False):
-            return (
-                isinstance(value, hint)
-                if getattr(hint, "_is_runtime_protocol", False)
-                else False
-            )
+            return (isinstance(value, hint)
+                    if getattr(hint, "_is_runtime_protocol", False) else False)
         if cls._is_typevar_like(hint):
             if isinstance(hint, TypeVar):
                 if hint.__constraints__:
-                    return any(cls._is_match(value, c) for c in hint.__constraints__)
+                    return any(
+                        cls._is_match(value, c) for c in hint.__constraints__)
                 if hint.__bound__ is not None:
                     return cls._is_match(value, hint.__bound__)
             return True
@@ -244,16 +237,18 @@ class TypeMatch:
             # Bare Callable without args always matches.
             if not args:
                 return True
-            # Extract the parameter spec from typing.Callable[[...], R] or Callable[..., R].
+            # Extract the parameter spec from typing.Callable[[...], R]
+            # or Callable[..., R].
             params_spec: object = args[0] if len(args) >= 1 else Ellipsis
-            # Ellipsis or ParamSpec/Concatenate-like → accept any parameter shape.
+            # Ellipsis or ParamSpec/Concatenate-like → accept any
+            # parameter shape.
             if params_spec is Ellipsis or not isinstance(params_spec, list):
                 return True
-            # Otherwise we have a concrete parameter type list to check positionally.
+            # Otherwise we have a concrete parameter type list to
+            # check positionally.
             try:
                 parameters: MappingProxyType[str, Parameter] = signature(
-                    value
-                ).parameters
+                    value).parameters
             except Exception:
                 # Opaque/builtins: consider it a match if it's callable
                 return True
@@ -261,40 +256,32 @@ class TypeMatch:
             has_varargs: bool = False
             for p in parameters.values():
                 if p.kind in (
-                    Parameter.POSITIONAL_ONLY,
-                    Parameter.POSITIONAL_OR_KEYWORD,
+                        Parameter.POSITIONAL_ONLY,
+                        Parameter.POSITIONAL_OR_KEYWORD,
                 ):
-                    declared.append(
-                        p.annotation if p.annotation is not Parameter.empty else Any
-                    )
+                    declared.append(p.annotation if p.
+                                    annotation is not Parameter.empty else Any)
                 elif p.kind == Parameter.VAR_POSITIONAL:
                     has_varargs = True
             declared_n: int = len(declared)
-            # Require the callable to accept at least the expected number of positional params
-            # unless it declares varargs.
+            # Require the callable to accept at least the expected number of
+            # positional params unless it declares varargs.
             if declared_n < len(params_spec) and not has_varargs:
                 return False
             for idx, expected_t in enumerate(params_spec):
                 if idx >= declared_n:
                     break
                 actual_t: object = declared[idx]
-                if (
-                    actual_t is not Any
-                    and actual_t is not Parameter.empty
-                    and not cls._is_match(actual_t, expected_t)
-                ):
+                if (actual_t is not Any and actual_t is not Parameter.empty
+                        and not cls._is_match(actual_t, expected_t)):
                     return False
             return True
         if origin in (dict, ABCMapping, MutableMapping):
-            return (
-                all(
-                    cls._is_match(k, args[0] if len(args) > 0 else Any)
-                    and cls._is_match(v, args[1] if len(args) > 1 else Any)
-                    for k, v in value.items()
-                )
-                if isinstance(value, ABCMapping)
-                else False
-            )
+            return (all(
+                cls._is_match(k, args[0] if len(args) > 0 else Any)
+                and cls._is_match(v, args[1] if len(args) > 1 else Any)
+                for k, v in value.items())
+                    if isinstance(value, ABCMapping) else False)
         if origin in (Sequence, MutableSequence):
             if not isinstance(value, Sequence):
                 return False
@@ -303,12 +290,14 @@ class TypeMatch:
             with suppress(TypeError):
                 return all(cls._is_match(x, args[0]) for x in value)
             return False
-        if origin in (ABCIterable, ABCCollection) and isinstance(value, Iterable):
-            return all(cls._is_match(x, args[0]) for x in iter(value)) if args else True
+        if origin in (ABCIterable, ABCCollection) and isinstance(
+                value, Iterable):
+            return all(cls._is_match(x, args[0])
+                       for x in iter(value)) if args else True
         if origin in (tuple, list, dict, set, frozenset) and not isinstance(
-            value, origin if origin is not frozenset else (frozenset,)
-        ):
-            return cls._is_match(value, args[0]) if origin is list and args else False
+                value, origin if origin is not frozenset else (frozenset, )):
+            return cls._is_match(value,
+                                 args[0]) if origin is list and args else False
         if origin is tuple:
             if not isinstance(value, tuple):
                 return False  # pragma: no cover
@@ -316,29 +305,22 @@ class TypeMatch:
                 return all(cls._is_match(v, args[0]) for v in value)
             if len(args) != len(value):
                 return False
-            return all(cls._is_match(v, t) for v, t in zip(value, args, strict=True))
+            return all(
+                cls._is_match(v, t) for v, t in zip(value, args, strict=True))
         if origin is list:
-            return (
-                (
-                    all(cls._is_match(x, args[0]) for x in value)
-                    if isinstance(value, list)
-                    else cls._is_match(value, args[0])
-                )
-                if args
-                else isinstance(value, list)
-            )
+            return ((all(
+                cls._is_match(x, args[0])
+                for x in value) if isinstance(value, list) else cls._is_match(
+                    value, args[0])) if args else isinstance(value, list))
         if origin is dict:
-            return (
-                all(
-                    cls._is_match(k, args[0] if len(args) > 0 else Any)
-                    and cls._is_match(v, args[1] if len(args) > 1 else Any)
-                    for k, v in value.items()
-                )
-                if isinstance(value, dict)
-                else False
-            )
+            return (all(
+                cls._is_match(k, args[0] if len(args) > 0 else Any)
+                and cls._is_match(v, args[1] if len(args) > 1 else Any)
+                for k, v in value.items())
+                    if isinstance(value, dict) else False)
         if origin in (set, frozenset):
-            if not isinstance(value, origin) or not isinstance(value, Iterable):
+            if not isinstance(value, origin) or not isinstance(
+                    value, Iterable):
                 return False
             if not args:
                 return True
@@ -363,34 +345,24 @@ class TypeMatch:
         supertype: Optional[object] = getattr(hint, "__supertype__", None)
         if callable(hint) and supertype is not None:
             return cls._type_specificity_score(value, supertype) + 1
-        if (
-            isinstance(hint, type)
-            and issubclass(hint, dict)
-            and hasattr(hint, "__annotations__")
-            and hasattr(hint, "__total__")
-        ):
-            return (
-                25
-                + 2 * len(getattr(hint, "__required_keys__", set()))
-                + sum(
-                    cls._type_specificity_score(value, t)
-                    for t in hint.__annotations__.values()
-                )
-            )
+        if (isinstance(hint, type) and issubclass(hint, dict)
+                and hasattr(hint, "__annotations__")
+                and hasattr(hint, "__total__")):
+            return (25 + 2 * len(getattr(hint, "__required_keys__", set())) +
+                    sum(
+                        cls._type_specificity_score(value, t)
+                        for t in hint.__annotations__.values()))
         if isinstance(hint, type) and getattr(hint, "_is_protocol", False):
             return 14 if getattr(hint, "_is_runtime_protocol", False) else 6
         if cls._is_typevar_like(hint):
             if isinstance(hint, TypeVar):
                 if hint.__constraints__:
-                    return (
-                        max(
-                            cls._type_specificity_score(value, c)
-                            for c in hint.__constraints__
-                        )
-                        - 1
-                    )
+                    return (max(
+                        cls._type_specificity_score(value, c)
+                        for c in hint.__constraints__) - 1)
                 if hint.__bound__ is not None:
-                    return cls._type_specificity_score(value, hint.__bound__) - 1
+                    return cls._type_specificity_score(value,
+                                                       hint.__bound__) - 1
             return 1
         origin: Optional[type] = get_origin(hint)
         args: Tuple[Any, ...] = get_args(hint)
@@ -401,47 +373,37 @@ class TypeMatch:
         if origin is ClassVar:
             return cls._type_specificity_score(value, args[0]) if args else 1
         if cls._is_union_origin(origin):
-            return max([cls._type_specificity_score(value, t) for t in args]) - len(
-                args
-            )
+            return max([cls._type_specificity_score(value, t)
+                        for t in args]) - len(args)
         if origin in (Type, type):
-            return 8 if not args else 15 + cls._type_specificity_score(value, args[0])
+            return 8 if not args else 15 + cls._type_specificity_score(
+                value, args[0])
         if origin is ABCCallable:
-            params_spec: Union[ellipsis, Tuple[object, ...]] = (
-                args[0] if len(args or ()) >= 1 else Ellipsis
-            )
-            return 12 + (
-                sum(cls._type_specificity_score(value, p) for p in params_spec)
-                if isinstance(params_spec, tuple)
-                else 0
-            )
+            params_spec: Union[ellipsis, Tuple[object, ...]] = (args[0] if len(
+                args or ()) >= 1 else Ellipsis)
+            return 12 + (sum(
+                cls._type_specificity_score(value, p)
+                for p in params_spec) if isinstance(params_spec, tuple) else 0)
         if origin in (dict, ABCMapping, MutableMapping):
-            return (
-                20 + sum(cls._type_specificity_score(value, a) for a in args)
-                if isinstance(value, dict)
-                else -50
-            )
+            return (20 +
+                    sum(cls._type_specificity_score(value, a)
+                        for a in args) if isinstance(value, dict) else -50)
         if origin in (Sequence, MutableSequence, ABCIterable, ABCCollection):
-            return (
-                (18 + cls._type_specificity_score(value, args[0]) if args else 16)
-                if isinstance(value, (list, tuple, set, frozenset))
-                else -50
-            )
+            return ((18 +
+                     cls._type_specificity_score(value, args[0]) if args else
+                     16) if isinstance(value,
+                                       (list, tuple, set, frozenset)) else -50)
         if origin and origin in (tuple, list, dict, set, frozenset):
-            return (
-                20 + sum(cls._type_specificity_score(value, a) for a in args)
-                if isinstance(value, origin)
-                else -50
-            )
+            return (20 +
+                    sum(cls._type_specificity_score(value, a)
+                        for a in args) if isinstance(value, origin) else -50)
         if hint in (Tuple, List, Dict, tuple, list, dict, set, frozenset):
             return 10
         if isinstance(hint, type):
             return 5 + max(
                 0,
-                50
-                - cls._class_distance(
-                    value if isinstance(value, type) else type(value), hint
-                ),
+                50 - cls._class_distance(
+                    value if isinstance(value, type) else type(value), hint),
             )
         return 1
 
@@ -480,59 +442,48 @@ class TypeMatch:
                 return cls._resolve_hint(tmap_local[k])
             param: Optional[Parameter] = params_map.get(k)
             if param is None:
-                return (
-                    cls._kwargs_value_type_from_varkw(kw_param.annotation)
-                    if kw_param and kw_param is not Parameter.empty
-                    else Any
-                )
-            return param.annotation if param.annotation is not Parameter.empty else Any
+                return (cls._kwargs_value_type_from_varkw(kw_param.annotation)
+                        if kw_param and kw_param is not Parameter.empty else
+                        Any)
+            return (param.annotation
+                    if param.annotation is not Parameter.empty else Any)
 
         for func in options:
-            params: MappingProxyType[str, Parameter] = signature(func).parameters
+            params: MappingProxyType[str,
+                                     Parameter] = signature(func).parameters
             varkw: Optional[Parameter] = next(
-                (p for p in params.values() if p.kind == Parameter.VAR_KEYWORD),
+                (p
+                 for p in params.values() if p.kind == Parameter.VAR_KEYWORD),
                 None,
             )
-            tmap: Optional[Mapping[str, Any]] = getattr(
-                func, "__dispatch_type_map__", None
-            )
+            tmap: Optional[Mapping[str,
+                                   Any]] = getattr(func,
+                                                   "__dispatch_type_map__",
+                                                   None)
             if not all(
-                cls._is_match(match[k], _key_hint(k, params, varkw, tmap)) for k in keys
-            ):
+                    cls._is_match(match[k], _key_hint(k, params, varkw, tmap))
+                    for k in keys):
                 continue
             score: int = sum(
-                cls._type_specificity_score(match[k], _key_hint(k, params, varkw, tmap))
-                for k in keys
-            )
+                cls._type_specificity_score(match[k],
+                                            _key_hint(k, params, varkw, tmap))
+                for k in keys)
             for k in keys:
                 p: Optional[Parameter] = params.get(k)
-                score += (
-                    40
-                    if (
-                        cls._resolve_hint(
-                            tmap[k]
-                            if (tmap and k in tmap)
-                            else (
-                                p.annotation
-                                if (p and p.annotation is not Parameter.empty)
-                                else Any
-                            )
-                        )
-                        not in (Any, object)
-                    )
-                    else 20
-                )
-            score -= 1000 * sum(1 for k in keys if k not in params and not varkw)
+                score += (40 if (cls._resolve_hint(tmap[k] if (
+                    tmap and k in tmap) else (p.annotation if (
+                        p and p.annotation is not Parameter.empty) else Any))
+                                 not in (Any, object)) else 20)
+            score -= 1000 * sum(1
+                                for k in keys if k not in params and not varkw)
             if varkw:
                 score -= 1
-            if any(p.kind == Parameter.VAR_POSITIONAL for p in params.values()):
+            if any(p.kind == Parameter.VAR_POSITIONAL
+                   for p in params.values()):
                 score -= 2
             ranked.append((func, score))
-        return (
-            [func for func, s in ranked if s == max(s for _, s in ranked)]
-            if ranked
-            else []
-        )
+        return ([func for func, s in ranked
+                 if s == max(s for _, s in ranked)] if ranked else [])
 
 
 class WizeDispatcher:
@@ -603,8 +554,7 @@ class WizeDispatcher:
             self._sig = signature(obj=original)
             self._skip_first = skip_first
             self._param_order = WizeDispatcher._param_order(
-                sig=self._sig, skip_first=skip_first
-            )
+                sig=self._sig, skip_first=skip_first)
             self._overloads = []
             self._cache = {}
             self._reg_counter = 0
@@ -627,13 +577,12 @@ class WizeDispatcher:
                 `BoundArguments` with defaults applied and
                 `provided_keys` are names present in the call.
             """
-            raw: BoundArguments = (
-                self._sig.bind(instance, *args, **kwargs)
-                if self._skip_first
-                else self._sig.bind(*args, **kwargs)
-            )
+            raw: BoundArguments = (self._sig.bind(instance, *args, **kwargs)
+                                   if self._skip_first else self._sig.bind(
+                                       *args, **kwargs))
             raw.apply_defaults()
-            return raw, frozenset(n for n in self._param_order if n in raw.arguments)
+            return raw, frozenset(n for n in self._param_order
+                                  if n in raw.arguments)
 
         def _arg_types(self, bound: BoundArguments) -> Tuple[Type[Any], ...]:
             """Return runtime types in dispatch order.
@@ -644,7 +593,8 @@ class WizeDispatcher:
             Returns:
                 A tuple of runtime types per parameter.
             """
-            return tuple(type(bound.arguments[name]) for name in self._param_order)
+            return tuple(
+                type(bound.arguments[name]) for name in self._param_order)
 
         @staticmethod
         def _make_adapter(
@@ -663,7 +613,8 @@ class WizeDispatcher:
                 `(adapter, defaults)` where `defaults` maps declared
                 params to their default values.
             """
-            param: MappingProxyType[str, Parameter] = signature(func).parameters
+            param: MappingProxyType[str,
+                                    Parameter] = signature(func).parameters
 
             def adapter(*_a: Any, **all_named: Any) -> Any:
                 """Call `func`, injecting undeclared names as globals.
@@ -675,13 +626,12 @@ class WizeDispatcher:
                 kwargs_pass: Dict[str, Any] = {
                     n: all_named[n]
                     for n in [
-                        p.name
-                        for p in param.values()
+                        p.name for p in param.values()
                         if p.kind == Parameter.KEYWORD_ONLY
-                    ]
-                    if n in all_named
+                    ] if n in all_named
                 }
-                if any(p.kind == Parameter.VAR_KEYWORD for p in param.values()):
+                if any(p.kind == Parameter.VAR_KEYWORD
+                       for p in param.values()):
                     for k, v in all_named.items():
                         if k not in param:
                             kwargs_pass[k] = v
@@ -690,23 +640,18 @@ class WizeDispatcher:
                 try:
                     for k, v in all_named.items():
                         if k not in param:
-                            injected[k] = (
-                                (True, globalns[k]) if k in globalns else (False, None)
-                            )
+                            injected[k] = ((True,
+                                            globalns[k]) if k in globalns else
+                                           (False, None))
                             globalns[k] = v
                     return func(
                         *[
-                            all_named[n]
-                            for n in [
-                                p.name
-                                for p in param.values()
-                                if p.kind
-                                in (
+                            all_named[n] for n in [
+                                p.name for p in param.values() if p.kind in (
                                     Parameter.POSITIONAL_ONLY,
                                     Parameter.POSITIONAL_OR_KEYWORD,
                                 )
-                            ]
-                            if n in all_named
+                            ] if n in all_named
                         ],
                         **kwargs_pass,
                     )
@@ -719,8 +664,7 @@ class WizeDispatcher:
 
             return update_wrapper(adapter, func), {
                 p.name: p.default
-                for p in param.values()
-                if p.default is not Parameter.empty
+                for p in param.values() if p.default is not Parameter.empty
             }
 
         def _dispatch(
@@ -740,29 +684,30 @@ class WizeDispatcher:
             and invokes the chosen callable.
             """
             # 1) Bind to the original signature and apply defaults.
-            bound, _provided = self._bind(instance=instance, args=args, kwargs=kwargs)
+            bound, _provided = self._bind(instance=instance,
+                                          args=args,
+                                          kwargs=kwargs)
 
             # 2) Identify how the *original* signature named varargs/**kwargs.
-            orig_params_list: list[Parameter] = list(self._sig.parameters.values())
+            orig_params_list: list[Parameter] = list(
+                self._sig.parameters.values())
             orig_varpos_name: Optional[str] = next(
-                (
-                    p.name
-                    for p in orig_params_list
-                    if p.kind == Parameter.VAR_POSITIONAL
-                ),
+                (p.name for p in orig_params_list
+                 if p.kind == Parameter.VAR_POSITIONAL),
                 None,
             )
             orig_varkw_name: Optional[str] = next(
-                (p.name for p in orig_params_list if p.kind == Parameter.VAR_KEYWORD),
+                (p.name
+                 for p in orig_params_list if p.kind == Parameter.VAR_KEYWORD),
                 None,
             )
             # Extract extras from the bound call using those names.
             pos_extras_orig: tuple[Any, ...] = tuple(
-                bound.arguments.get(orig_varpos_name, ()) if orig_varpos_name else ()
-            )
+                bound.arguments.get(orig_varpos_name, (
+                )) if orig_varpos_name else ())
             kw_extras_orig: Dict[str, Any] = dict(
-                bound.arguments.get(orig_varkw_name, {}) if orig_varkw_name else {}
-            )
+                bound.arguments.get(orig_varkw_name, {}
+                                    ) if orig_varkw_name else {})
 
             # 3) Build a *structure-aware* cache key.
             key_parts: list[object] = []
@@ -786,26 +731,22 @@ class WizeDispatcher:
             best_func: Optional[Callable[..., Any]] = None
             for ov in self._overloads:
                 func: Callable[..., Any] = ov._func
-                params: MappingProxyType[str, Parameter] = signature(func).parameters
+                params: MappingProxyType[str, Parameter] = signature(
+                    func).parameters
                 params_list: list[Parameter] = list(params.values())
                 # Skip receiver slot for methods/classmethods.
                 start_idx: int = 1 if self._skip_first and params_list else 0
                 fixed_params: list[Parameter] = [
-                    p
-                    for p in params_list[start_idx:]
-                    if p.kind
-                    in (
+                    p for p in params_list[start_idx:] if p.kind in (
                         Parameter.POSITIONAL_ONLY,
                         Parameter.POSITIONAL_OR_KEYWORD,
                         Parameter.KEYWORD_ONLY,
                     )
                 ]
-                has_varargs: bool = any(
-                    p.kind == Parameter.VAR_POSITIONAL for p in params_list
-                )
-                has_varkw: bool = any(
-                    p.kind == Parameter.VAR_KEYWORD for p in params_list
-                )
+                has_varargs: bool = any(p.kind == Parameter.VAR_POSITIONAL
+                                        for p in params_list)
+                has_varkw: bool = any(p.kind == Parameter.VAR_KEYWORD
+                                      for p in params_list)
                 # Simulate consumption of extras to validate *shape*
                 # 4 compatibility.
                 pos_extras_sim: list[Any] = list(pos_extras_orig)
@@ -836,7 +777,8 @@ class WizeDispatcher:
                 if pos_extras_sim and not has_varargs:
                     continue
                 declared_names: set[str] = {p.name for p in params_list}
-                leftover_keys: set[str] = set(kw_extras_sim.keys()) - declared_names
+                leftover_keys: set[str] = set(
+                    kw_extras_sim.keys()) - declared_names
                 if leftover_keys and not has_varkw:
                     continue
                 for k_left in leftover_keys:
@@ -852,12 +794,12 @@ class WizeDispatcher:
                 # Resolve hints for this candidate and HARD-FILTER
                 # by type match.
                 varkw_param: Optional[Parameter] = next(
-                    (p for p in params.values() if p.kind == Parameter.VAR_KEYWORD),
+                    (p for p in params.values()
+                     if p.kind == Parameter.VAR_KEYWORD),
                     None,
                 )
                 tmap: Optional[Mapping[str, Any]] = getattr(
-                    func, "__dispatch_type_map__", None
-                )
+                    func, "__dispatch_type_map__", None)
 
                 def hint_for(
                     name: str,
@@ -870,14 +812,12 @@ class WizeDispatcher:
                         return TypeMatch._resolve_hint(tmap[name])
                     p: Optional[Parameter] = params.get(name)
                     if p is None:
-                        return (
-                            TypeMatch._kwargs_value_type_from_varkw(
-                                varkw_param.annotation
-                            )
-                            if varkw_param and varkw_param is not Parameter.empty
-                            else Any
-                        )
-                    return p.annotation if p.annotation is not Parameter.empty else Any
+                        return (TypeMatch._kwargs_value_type_from_varkw(
+                            varkw_param.annotation) if varkw_param
+                                and varkw_param is not Parameter.empty else
+                                Any)
+                    return (p.annotation
+                            if p.annotation is not Parameter.empty else Any)
 
                 # Type compatibility check (fixes Callable vs int, etc.).
                 is_type_compatible: bool = True
@@ -904,18 +844,16 @@ class WizeDispatcher:
                         h = p.annotation
                         return h not in (Any, object, WILDCARD)
                     return False
+
                 explicit_satisfied: int = sum(
-                    1
-                    for n, v in cand_values.items()
-                    if v is not WILDCARD and is_declared_concrete(n)
-                )
+                    1 for n, v in cand_values.items()
+                    if v is not WILDCARD and is_declared_concrete(n))
                 score: int = 0
                 for n, v in cand_values.items():
-                    h:object = hint_for(n)
+                    h: object = hint_for(n)
                     score += TypeMatch._type_specificity_score(v, h)
-                    score += (
-                        40 if TypeMatch._resolve_hint(h) not in (Any, object) else 20
-                    )
+                    score += (40 if TypeMatch._resolve_hint(h)
+                              not in (Any, object) else 20)
                 # Reward declared params satisfied
                 # (decorator or function declared).
                 score += 25 * explicit_satisfied
@@ -960,9 +898,9 @@ class WizeDispatcher:
             Returns:
                 Return value from the selected callable.
             """
-            orig_func: Callable[..., Any] = (
-                getattr(chosen, "__wrapped__", None) or chosen
-            )
+            orig_func: Callable[...,
+                                Any] = (getattr(chosen, "__wrapped__", None)
+                                        or chosen)
             if orig_func is chosen:
                 return chosen(**dict(bound.arguments))
             orig_sig: Signature = signature(orig_func)
@@ -971,19 +909,21 @@ class WizeDispatcher:
             # (the one used to bind).
             bind_params: list[Parameter] = list(self._sig.parameters.values())
             bind_varpos_name: Optional[str] = next(
-                (p.name for p in bind_params if p.kind == Parameter.VAR_POSITIONAL),
+                (p.name
+                 for p in bind_params if p.kind == Parameter.VAR_POSITIONAL),
                 None,
             )
             bind_varkw_name: Optional[str] = next(
-                (p.name for p in bind_params if p.kind == Parameter.VAR_KEYWORD),
+                (p.name
+                 for p in bind_params if p.kind == Parameter.VAR_KEYWORD),
                 None,
             )
             pos_extras_orig: tuple[Any, ...] = tuple(
-                bound.arguments.get(bind_varpos_name, ()) if bind_varpos_name else ()
-            )
+                bound.arguments.get(bind_varpos_name, (
+                )) if bind_varpos_name else ())
             kw_extras_orig: Dict[str, Any] = dict(
-                bound.arguments.get(bind_varkw_name, {}) if bind_varkw_name else {}
-            )
+                bound.arguments.get(bind_varkw_name, {}
+                                    ) if bind_varkw_name else {})
             # Working copies that we will consume while assigning.
             pos_extras: list[Any] = list(pos_extras_orig)
             kw_extras: Dict[str, Any] = dict(kw_extras_orig)
@@ -1017,12 +957,10 @@ class WizeDispatcher:
                 else:
                     # No provided value; rely on function default.
                     pass
-            has_varargs_overload: bool = any(
-                p.kind == Parameter.VAR_POSITIONAL for p in orig_params
-            )
-            has_varkw_overload: bool = any(
-                p.kind == Parameter.VAR_KEYWORD for p in orig_params
-            )
+            has_varargs_overload: bool = any(p.kind == Parameter.VAR_POSITIONAL
+                                             for p in orig_params)
+            has_varkw_overload: bool = any(p.kind == Parameter.VAR_KEYWORD
+                                           for p in orig_params)
             if has_varargs_overload:
                 args_for_call.extend(pos_extras)
                 pos_extras.clear()
@@ -1031,12 +969,16 @@ class WizeDispatcher:
                 kw_extras.clear()
             to_inject: Dict[str, Any] = {}
             # Do not hardcode names: skip the original vararg/varkw names.
-            skip_names: set[str] = {n for n in (bind_varpos_name, bind_varkw_name) if n}
+            skip_names: set[str] = {
+                n
+                for n in (bind_varpos_name, bind_varkw_name) if n
+            }
             for name, val in bound.arguments.items():
                 if name in skip_names:
                     continue
                 if name not in consumed_names and name not in {
-                    p.name for p in orig_params
+                        p.name
+                        for p in orig_params
                 }:
                     to_inject[name] = val
             # Also inject leftover kw_extras
@@ -1047,25 +989,19 @@ class WizeDispatcher:
             # If bound had var-positional but overload doesn't
             # accept it, inject
             # a global with the original var-positional *name*.
-            if (
-                bind_varpos_name
-                and bind_varpos_name in bound.arguments
-                and not has_varargs_overload
-            ):
+            if (bind_varpos_name and bind_varpos_name in bound.arguments
+                    and not has_varargs_overload):
                 to_inject.setdefault(bind_varpos_name, pos_extras_orig)
             # If bound had var-keyword but overload doesn't accept it, inject
             # a global with the original var-keyword *name*.
-            if (
-                bind_varkw_name
-                and bind_varkw_name in bound.arguments
-                and not has_varkw_overload
-            ):
+            if (bind_varkw_name and bind_varkw_name in bound.arguments
+                    and not has_varkw_overload):
                 to_inject.setdefault(bind_varkw_name, kw_extras_orig)
             backup: Dict[str, Tuple[bool, Any]] = {}
             gns: Dict[str, Any] = orig_func.__globals__
             try:
                 for k, v in to_inject.items():
-                    backup[k] = (True, gns[k]) if k in gns else (False, None)                    
+                    backup[k] = (True, gns[k]) if k in gns else (False, None)
                     gns[k] = v
                 return orig_func(*args_for_call, **kwargs_for_call)
             finally:
@@ -1108,14 +1044,10 @@ class WizeDispatcher:
                     _param_order=self._param_order,
                     _dec_keys=dec_keys,
                     _is_original=is_original,
-                    _reg_index=(
-                        reg_index_override
-                        if reg_index_override is not None
-                        else self._reg_counter
-                    ),
+                    _reg_index=(reg_index_override if reg_index_override
+                                is not None else self._reg_counter),
                     _defaults=defaults,
-                )
-            )
+                ))
             self._reg_counter += 1
             self._cache.clear()
 
@@ -1158,9 +1090,9 @@ class WizeDispatcher:
                 target_name: Name of the target function.
                 original: Original function kept as fallback.
             """
-            super().__init__(
-                target_name=target_name, original=original, skip_first=False
-            )
+            super().__init__(target_name=target_name,
+                             original=original,
+                             skip_first=False)
 
     class _OverloadDescriptor:
         """Descriptor that queues method overloads during class creation.
@@ -1190,8 +1122,7 @@ class WizeDispatcher:
             """
             attr_str: str = "__dispatch_registry__"
             reg_map: Dict[str, WizeDispatcher._MethodRegistry] = getattr(
-                owner, attr_str, {}
-            )
+                owner, attr_str, {})
             if not hasattr(owner, attr_str):
                 setattr(owner, attr_str, reg_map)
             reg: WizeDispatcher._MethodRegistry
@@ -1200,28 +1131,32 @@ class WizeDispatcher:
                     original_attr: Any = owner.__dict__.get(target_name)
                     has_receiver: bool = True
                     original_func: Callable[..., Any]
-                    if isinstance(original_attr, property) and original_attr.fget:
-                        original_func = original_attr.fset or original_attr.fget
-                    elif isinstance(original_attr, (classmethod, staticmethod)):
+                    if isinstance(original_attr,
+                                  property) and original_attr.fget:
+                        original_func = (original_attr.fset
+                                         or original_attr.fget)
+                    elif isinstance(original_attr,
+                                    (classmethod, staticmethod)):
                         original_func = original_attr.__func__
                         has_receiver = isinstance(original_attr, classmethod)
                     elif callable(original_attr):
                         original_func = original_attr
                     else:
                         original_func = items[-1][0]
-                    reg = reg_map[target_name] = WizeDispatcher._MethodRegistry(
-                        target_name=target_name,
-                        original=original_func,
-                        has_receiver=has_receiver,
-                    )
+                    reg = reg_map[
+                        target_name] = WizeDispatcher._MethodRegistry(
+                            target_name=target_name,
+                            original=original_func,
+                            has_receiver=has_receiver,
+                        )
                     reg.register(
                         func=original_func,
                         type_map={
-                            n: WizeDispatcher._resolve_hints(
+                            n:
+                            WizeDispatcher._resolve_hints(
                                 func=original_func,
-                                globalns=getattr(
-                                    original_func, "__wrapped__", original_func
-                                ).__globals__,
+                                globalns=getattr(original_func, "__wrapped__",
+                                                 original_func).__globals__,
                                 localns=owner.__dict__,
                             ).get(n, WILDCARD)
                             for n in reg._param_order
@@ -1231,27 +1166,25 @@ class WizeDispatcher:
                         reg_index_override=-1,
                     )
 
-                    def _wrap_inst(self: Any, *a: Any, reg=reg, **k: Any) -> Any:
+                    def _wrap_inst(self: Any,
+                                   *a: Any,
+                                   reg=reg,
+                                   **k: Any) -> Any:
                         """Bound method wrapper that forwards to dispatch."""
                         return reg._dispatch(instance=self, args=a, kwargs=k)
 
-                    selected_func: Union[property, classmethod, Callable[..., Any]] = (
-                        _wrap_inst
-                    )
+                    selected_func: Union[property, classmethod,
+                                         Callable[..., Any]] = (_wrap_inst)
                     if isinstance(original_attr, property):
                         selected_func = original_attr.setter(
                             lambda self_, value, _reg=reg: _reg._dispatch(
-                                instance=self_, args=(value,), kwargs={}
-                            )
-                        )
+                                instance=self_, args=(value, ), kwargs={}))
                     elif isinstance(original_attr, classmethod):
                         selected_func = classmethod(selected_func)
                     elif isinstance(original_attr, staticmethod):
                         selected_func = staticmethod(
                             lambda *a, _reg=reg, **k: _reg._dispatch(
-                                instance=None, args=a, kwargs=k
-                            )
-                        )
+                                instance=None, args=a, kwargs=k))
                     setattr(owner, target_name, selected_func)
                 reg = getattr(owner, attr_str)[target_name]
                 fb_ann: Dict[str, Any] = WizeDispatcher._resolve_hints(
@@ -1260,16 +1193,14 @@ class WizeDispatcher:
                     localns=owner.__dict__,
                 )
                 for func, decorator_types, decorator_pos in items:
-                    if not getattr(func, "__qualname__", "").startswith(
-                        owner.__qualname__ + "."
-                    ):
+                    if not getattr(func, "__qualname__",
+                                   "").startswith(owner.__qualname__ + "."):
                         continue
                     ld: int = len(decorator_pos)
                     dec_types: Dict[str, Any] = {
                         **{
                             v: decorator_pos[i]
-                            for i, v in enumerate(reg._param_order)
-                            if i < ld
+                            for i, v in enumerate(reg._param_order) if i < ld
                         },
                         **decorator_types,
                     }
@@ -1311,8 +1242,7 @@ class WizeDispatcher:
                 decorator_pos: Positional decorator types in order.
             """
             self._queues.setdefault(target_name, []).append(
-                (func, dict(decorator_types), tuple(decorator_pos))
-            )
+                (func, dict(decorator_types), tuple(decorator_pos)))
 
     @staticmethod
     def _param_order(*, sig: Signature, skip_first: bool) -> Tuple[str, ...]:
@@ -1332,11 +1262,11 @@ class WizeDispatcher:
 
     @staticmethod
     def _register_function_overload(
-        *,
-        target_name: str,
-        func: Callable[..., Any],
-        decorator_types: Mapping[str, Any],
-        decorator_pos: Tuple[Any, ...] = (),
+            *,
+            target_name: str,
+            func: Callable[..., Any],
+            decorator_types: Mapping[str, Any],
+            decorator_pos: Tuple[Any, ...] = (),
     ) -> Callable[..., Any]:
         """Register an overload for a free function target.
 
@@ -1359,21 +1289,19 @@ class WizeDispatcher:
         wrap_attr: str = "__fdispatch_wrapper__"
         if not hasattr(mod, attr_str):
             setattr(mod, attr_str, {})
-        regmap: Dict[str, WizeDispatcher._FunctionRegistry] = getattr(mod, attr_str)
+        regmap: Dict[str, WizeDispatcher._FunctionRegistry] = getattr(
+            mod, attr_str)
         target: Optional[Callable[..., Any]] = mod_dict.get(target_name)
         if target is None or not callable(target):
-            raise AttributeError(
-                f"Function '{target_name}' " "must exist before registering overloads"
-            )
+            raise AttributeError(f"Function '{target_name}' "
+                                 "must exist before registering overloads")
         reg: WizeDispatcher._FunctionRegistry
         if target_name not in regmap:
             regmap[target_name] = WizeDispatcher._FunctionRegistry(
-                target_name=target_name, original=target
-            )
+                target_name=target_name, original=target)
             wrapped: Callable[..., Any] = update_wrapper(
                 lambda *a, **k: regmap[target_name]._dispatch(
-                    instance=None, args=a, kwargs=k
-                ),
+                    instance=None, args=a, kwargs=k),
                 target,
             )
             setattr(wrapped, wrap_attr, True)
@@ -1385,8 +1313,7 @@ class WizeDispatcher:
                 reg._original = current
                 reg._sig = signature(obj=current)
                 reg._param_order = tuple(
-                    p.name for p in signature(obj=current).parameters.values()
-                )
+                    p.name for p in signature(obj=current).parameters.values())
                 if not reg._overloads:
                     reg._overloads = []
                     reg._cache = {}
@@ -1394,9 +1321,10 @@ class WizeDispatcher:
                 reg.register(
                     func=current,
                     type_map={
-                        n: WizeDispatcher._resolve_hints(
-                            func=current, globalns=mod_dict
-                        ).get(n, WILDCARD)
+                        n:
+                        WizeDispatcher._resolve_hints(func=current,
+                                                      globalns=mod_dict).get(
+                                                          n, WILDCARD)
                         for n in reg._param_order
                     },
                     dec_keys=frozenset(),
@@ -1404,7 +1332,8 @@ class WizeDispatcher:
                     reg_index_override=-1,
                 )
                 wrapped = update_wrapper(
-                    lambda *a, **k: reg._dispatch(instance=None, args=a, kwargs=k),
+                    lambda *a, **k: reg._dispatch(
+                        instance=None, args=a, kwargs=k),
                     current,
                 )
                 setattr(wrapped, wrap_attr, True)
@@ -1414,8 +1343,7 @@ class WizeDispatcher:
         dec_types: Dict[str, Any] = {
             **{
                 name: decorator_pos[i]
-                for i, name in enumerate(reg._param_order)
-                if i < ld
+                for i, name in enumerate(reg._param_order) if i < ld
             },
             **decorator_types,
         }
@@ -1424,10 +1352,10 @@ class WizeDispatcher:
             type_map=WizeDispatcher._merge_types(
                 order=reg._param_order,
                 decorator_types=dec_types,
-                fn_ann=WizeDispatcher._resolve_hints(func=func, globalns=mod_dict),
-                fallback_ann=WizeDispatcher._resolve_hints(
-                    func=reg._original, globalns=mod_dict
-                ),
+                fn_ann=WizeDispatcher._resolve_hints(func=func,
+                                                     globalns=mod_dict),
+                fallback_ann=WizeDispatcher._resolve_hints(func=reg._original,
+                                                           globalns=mod_dict),
             ),
             dec_keys=frozenset(dec_types.keys()),
             is_original=False,
@@ -1453,16 +1381,10 @@ class WizeDispatcher:
         """
         raw: Dict[str, Any] = get_type_hints(
             obj=func,
-            globalns=(
-                func.__globals__
-                if globalns is None
-                else (globalns if isinstance(globalns, dict) else dict(globalns))
-            ),
-            localns=(
-                None
-                if localns is None
-                else (localns if isinstance(localns, dict) else dict(localns))
-            ),
+            globalns=(func.__globals__ if globalns is None else (
+                globalns if isinstance(globalns, dict) else dict(globalns))),
+            localns=(None if localns is None else (
+                localns if isinstance(localns, dict) else dict(localns))),
         )
         # Normalize all resolved annotations for consistent downstream handling
         with suppress(Exception):
@@ -1492,15 +1414,9 @@ class WizeDispatcher:
             Effective mapping name -> type.
         """
         return {
-            name: (
-                decorator_types[name]
-                if name in decorator_types
-                else (
-                    fn_ann[name]
-                    if name in fn_ann
-                    else (fallback_ann or {}).get(name, WILDCARD)
-                )
-            )
+            name: (decorator_types[name] if name in decorator_types else
+                   (fn_ann[name] if name in fn_ann else
+                    (fallback_ann or {}).get(name, WILDCARD)))
             for name in order
         }
 
@@ -1528,7 +1444,8 @@ class WizeDispatcher:
             Returns:
                 The raw function object.
             """
-            return obj.__func__ if isinstance(obj, (classmethod, staticmethod)) else obj
+            return obj.__func__ if isinstance(obj, (classmethod,
+                                                    staticmethod)) else obj
 
         def _decorator_factory(*decorator_args: Any, **decorator_kwargs: Any):
             """Create a decorator that registers an overload.
@@ -1584,15 +1501,12 @@ class WizeDispatcher:
                     decorator_types=dict(decorator_types),
                     decorator_pos=tuple(decorator_pos),
                 )
+
             # Bare decorator usage: @dispatch.name
-            if (
-                len(decorator_args) == 1
-                and not decorator_kwargs
-                and (
-                    hasattr(decorator_args[0], "__code__")
-                    or isinstance(decorator_args[0], (classmethod, staticmethod))
-                )
-            ):
+            if (len(decorator_args) == 1 and not decorator_kwargs
+                    and (hasattr(decorator_args[0], "__code__")
+                         or isinstance(decorator_args[0],
+                                       (classmethod, staticmethod)))):
                 return _queue_or_register(
                     func=_extract_func(decorator_args[0]),
                     decorator_types={},
@@ -1610,7 +1524,6 @@ class WizeDispatcher:
 
 dispatch: Final[WizeDispatcher] = WizeDispatcher()
 
-
 if __name__ == "__main__":
     # Lightweight demonstration harness for core features. Mirrors the
     # style used in typingnormalize.py and uses a simple `show` helper.
@@ -1624,18 +1537,18 @@ if __name__ == "__main__":
         print(f"{'':55s} ok : {got == exp}\n")
 
     # --- Free function dispatch ---
-    def greet(name: object) -> str:
+    def greet(name: object) -> str:  # type: ignore[unused-ignore]
         return "FB"
 
     @dispatch.greet(name=str)
-    def _(name: str) -> str:
+    def _(name: str) -> str:  # type: ignore[no-untyped-def]
         return "STR"
 
     show('greet("Ada") → str overload', greet("Ada"), "STR")
     show("greet(3.14) → fallback", greet(3.14), "FB")
 
     # --- Positional decorator args (by param order) ---
-    def combine(a: object, b: object) -> str:
+    def combine(a: object, b: object) -> str:  # type: ignore[unused-ignore]
         return "FB"
 
     @dispatch.combine(int, int)
@@ -1646,11 +1559,11 @@ if __name__ == "__main__":
     show("combine('a', 2) → fallback", combine("a", 2), "FB")
 
     # --- Optional / Union-style constraints ---
-    def opt(x: object) -> str:
+    def opt(x: object) -> str: # type: ignore[unused-ignore]
         return "FB"
 
     @dispatch.opt(x=Optional[int])
-    def _(x: object) -> str:
+    def _(x: object) -> str:  # type: ignore[unused-ignore]
         return "OPT"
 
     show("opt(None) → Optional[int]", opt(None), "OPT")
@@ -1658,7 +1571,7 @@ if __name__ == "__main__":
     show("opt('x') → fallback", opt("x"), "FB")
 
     # --- Literal ---
-    def lit(x: object) -> str:
+    def lit(x: object) -> str:  # type: ignore[unused-ignore]
         return "FB"
 
     @dispatch.lit(x=Literal["go", "stop"])  # type: ignore[valid-type]
@@ -1670,11 +1583,11 @@ if __name__ == "__main__":
     show('lit("x") → behavior display', lit("x"))
 
     # --- Type["..."] normalization in dispatch ---
-    def ttype(x: type[object]) -> str:
+    def ttype(x: type[object]) -> str:  # type: ignore[unused-ignore]
         return "FB"
 
     @dispatch.ttype(x=Type["int"])  # type: ignore[valid-type]
-    def _(x: type[int]) -> str:
+    def _(x: type[int]) -> str:  # type: ignore[valid-type]
         return "TYPE[int]"
 
     show("ttype(int) → Type['int'] overload", ttype(int), "TYPE[int]")
@@ -1682,11 +1595,12 @@ if __name__ == "__main__":
     show("ttype(str) → behavior display", ttype(str))
 
     # --- Broad Callable example ---
-    def callme(x: object) -> str:
+    def callme(x: object) -> str:  # type: ignore[unused-ignore]
         return "FB"
 
     @dispatch.callme(x=Callable)
     def _(x) -> str:  # type: ignore[no-untyped-def]
         return "CALLABLE"
 
-    show("callme(lambda: 1) → Callable overload", callme(lambda: 1), "CALLABLE")
+    show("callme(lambda: 1) → Callable overload", callme(lambda: 1),
+         "CALLABLE")

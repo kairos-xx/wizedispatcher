@@ -18,7 +18,8 @@ def test_typematch_empty_and_kwargs_value_inference() -> None:
     # Case 1: empty options -> returns []
     assert TypeMatch({"x": 1}, []) == []
 
-    # Case 2: candidate has **kwargs Mapping[str, int] and match has an unknown key
+    # Case 2: candidate has **kwargs Mapping[str, int] and match has an
+    # unknown key
     def f(a, **kwargs: Mapping[str, int]) -> str:
         """Accept extras via Mapping[str, int] in **kwargs."""
         _ = (a, kwargs)

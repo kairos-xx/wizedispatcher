@@ -7,7 +7,7 @@ def f(a, *args, **kwargs):  # type: ignore[reportRedeclaration]
 
 
 @dispatch.f
-def f(a: int, *args, **kwargs):
+def f(a: int, *args, **kwargs):  # type: ignore[reportRedeclaration]
     """Overload for `a: int` which also accepts variadics."""
     return "int"
 
